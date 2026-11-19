@@ -69,6 +69,74 @@ class HrWorkflowTest < ActionDispatch::IntegrationTest
     ApplicationController.allow_forgery_protection = false
   end
 
+  test "employee records require an active HR session" do
+    get api_employees_path, as: :json
+    assert_response :unauthorized
+    get api_employee_path("HR-01"), as: :json
+    assert_response :unauthorized
+
+    sign_in
+    @manager.employee.update!(last_working_on: Date.current.yesterday)
+    get api_employee_path("HR-01"), as: :json
+    assert_response :unauthorized
+  end
+
+  test "matches employee numbers and names and combines directory filters" do
+    target = create_employee("EMP-001", "Asha Shah")
+    create_employee("EMP-002", "Asha Rao", country_code: "US")
+    create_employee("EMP-003", "Former Shah", last_working_on: Date.current.yesterday)
+    sign_in
+
+    get api_employees_path, params: { search: "emp-001" }, as: :json
+    assert_response :success
+    assert_equal [target.employee_number], response.parsed_body.fetch("employees").pluck("number")
+
+    get api_employees_path, params: {
+      search: "shah", country: "IN", department: @department.name, role: @role.name, status: "Active"
+    }, as: :json
+    assert_equal [target.employee_number, @manager.employee.employee_number].sort,
+      response.parsed_body.fetch("employees").pluck("number").sort
+
+    get api_employees_path, params: { search: "%" }, as: :json
+    assert_equal 0, response.parsed_body.fetch("total")
+  end
+
+  test "employee directory returns a stable page and the overall count" do
+    25.times { |index| create_employee("EMP-#{index}", "Demo Employee") }
+    sign_in
+
+    get api_employees_path, as: :json
+    assert_response :success
+    first_page = response.parsed_body
+    assert_equal 26, first_page.fetch("total")
+    assert_equal 25, first_page.fetch("employees").length
+
+    get api_employees_path, params: { page: 2 }, as: :json
+    second_page = response.parsed_body
+    assert_equal 2, second_page.fetch("page")
+    assert_equal ["EMP-24"], second_page.fetch("employees").pluck("number")
+  end
+
+  test "employee detail includes current, previous, and scheduled salary information" do
+    target = create_employee("EMP-001", "Asha Shah")
+    record_salary(target, amount: 100_000_000, on: target.joined_on)
+    record_salary(target, amount: 110_000_000, on: Date.current)
+    record_salary(target, amount: 120_000_000, on: Date.current.tomorrow)
+    sign_in
+
+    get api_employee_path(target.employee_number), as: :json
+    assert_response :success
+    detail = response.parsed_body
+    assert_equal "110000000", detail.dig("current", "amount")
+    assert_equal ["Scheduled", "Current", "Historical"], detail.fetch("timeline").pluck("status")
+    assert_equal "100000000", detail.dig("timeline", 1, "previous", "amount")
+    assert_equal({ "amount" => "10000000", "percentage" => 10 }, detail.dig("timeline", 1, "change"))
+    assert detail.fetch("canRecordSalary")
+
+    get api_employee_path(@manager.employee.employee_number), as: :json
+    refute response.parsed_body.fetch("canRecordSalary")
+  end
+
   private
 
   def create_employee(number, name, **overrides)
@@ -81,5 +149,11 @@ class HrWorkflowTest < ActionDispatch::IntegrationTest
   def sign_in(email: @manager.email)
     post api_session_path, params: { email: email, password: "sample-password" }, as: :json
     assert_response :success
+  end
+
+  def record_salary(employee, amount:, on:)
+    employee.salary_records.create!(
+      amount_minor: amount, currency_code: "INR", effective_on: on, recorded_by_hr_account: @manager
+    )
   end
 end

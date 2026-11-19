@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { previewEmployees } from "./preview-employees.js";
+import { api } from "./api.js";
 
-const previewDate = "2026-11-19";
-const pageSize = 6;
 const emptyFilters = { search: "", country: "", department: "", role: "", status: "" };
 const countryNames = { DE: "Germany", GB: "United Kingdom", IN: "India", JP: "Japan", US: "United States" };
 const currencyDigits = { EUR: 2, GBP: 2, INR: 2, JPY: 0, USD: 2 };
@@ -14,19 +12,17 @@ function formatDate(date) {
 
 function formatSalary(amount, currency, signed = false) {
   const precision = currencyDigits[currency];
-  const value = amount / 10 ** precision;
+  const units = BigInt(amount);
+  const digits = (units < 0n ? -units : units).toString().padStart(precision + 1, "0");
+  const fraction = precision ? digits.slice(-precision) : "";
+  const whole = precision ? digits.slice(0, -precision) : digits;
+  const value = `${units < 0n ? "-" : ""}${whole}${fraction ? "." + fraction : ""}`;
   return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
     style: "currency",
     currency,
-    minimumFractionDigits: Number.isInteger(value) ? 0 : precision,
+    minimumFractionDigits: Number(fraction) ? precision : 0,
     signDisplay: signed ? "exceptZero" : "auto",
   }).format(value);
-}
-
-function employmentStatus(employee) {
-  if (employee.joinedOn > previewDate) return "Upcoming";
-  if (employee.lastWorkingOn && employee.lastWorkingOn < previewDate) return "Former";
-  return "Active";
 }
 
 function Status({ children }) {
@@ -37,10 +33,6 @@ function FocusHeading({ children, ...props }) {
   const heading = useRef(null);
   useEffect(() => { heading.current.focus(); }, []);
   return <h1 {...props} ref={heading} tabIndex={-1}>{children}</h1>;
-}
-
-function distinct(values) {
-  return [...new Set(values)].sort((first, second) => first.localeCompare(second));
 }
 
 function Filter({ field, label, value, options, renderValue = (option) => option, onChange }) {
@@ -55,19 +47,11 @@ function Filter({ field, label, value, options, renderValue = (option) => option
   );
 }
 
-function EmployeeDirectory({ employees, filters, page, onFilter, onClear, onPage, onSelect }) {
-  const search = filters.search.trim().toLowerCase();
-  const matching = employees.filter((employee) =>
-    (!search || employee.name.toLowerCase().includes(search) || employee.number.toLowerCase().includes(search)) &&
-    (!filters.country || employee.country === filters.country) &&
-    (!filters.department || employee.department === filters.department) &&
-    (!filters.role || employee.role === filters.role) &&
-    (!filters.status || employmentStatus(employee) === filters.status)
-  );
+function EmployeeDirectory({ data, busy, error, filters, onFilter, onClear, onPage, onSelect, onRetry }) {
+  const { employees: visible = [], page = 1, pageSize = 25, total = 0, filters: options } = data ?? {};
   const start = (page - 1) * pageSize;
-  const visible = matching.slice(start, start + pageSize);
   const hasFilters = Object.values(filters).some(Boolean);
-  const resultCount = `${matching.length} ${matching.length === 1 ? "employee" : "employees"}`;
+  const resultCount = `${total.toLocaleString()} ${total === 1 ? "employee" : "employees"}`;
 
   return (
     <>
@@ -83,17 +67,24 @@ function EmployeeDirectory({ employees, filters, page, onFilter, onClear, onPage
               value={filters.search} onChange={(event) => onFilter("search", event.target.value)} />
           </div>
           <Filter field="country" label="Country" value={filters.country}
-            options={distinct(employees.map(({ country }) => country))}
+            options={options?.countries ?? []}
             renderValue={(country) => countryNames[country]} onChange={onFilter} />
           <Filter field="department" label="Department" value={filters.department}
-            options={distinct(employees.map(({ department }) => department))} onChange={onFilter} />
+            options={options?.departments ?? []} onChange={onFilter} />
           <Filter field="role" label="Job role" value={filters.role}
-            options={distinct(employees.map(({ role }) => role))} onChange={onFilter} />
+            options={options?.roles ?? []} onChange={onFilter} />
           <Filter field="status" label="Status" value={filters.status}
-            options={distinct(employees.map(employmentStatus))} onChange={onFilter} />
+            options={options?.statuses ?? []} onChange={onFilter} />
         </div>
 
-        {visible.length ? (
+        {error ? (
+          <div className="directory-empty">
+            <p role="alert">{error}</p>
+            <button className="button button--secondary" onClick={onRetry}>Try again</button>
+          </div>
+        ) : busy ? (
+          <p className="directory-empty" role="status">Loading employees…</p>
+        ) : visible.length ? (
           <div className="table-scroll">
             <table className="directory-table" aria-label="Employees">
               <thead>
@@ -109,7 +100,7 @@ function EmployeeDirectory({ employees, filters, page, onFilter, onClear, onPage
                     <td>{employee.department}</td>
                     <td>{employee.role}</td>
                     <td>{countryNames[employee.country]}</td>
-                    <td><Status>{employmentStatus(employee)}</Status></td>
+                    <td><Status>{employee.status}</Status></td>
                   </tr>
                 ))}
               </tbody>
@@ -121,13 +112,15 @@ function EmployeeDirectory({ employees, filters, page, onFilter, onClear, onPage
 
         <div className="directory-footer">
           <span className="muted" role="status">
-            {matching.length > 1 ? `${start + 1}–${start + visible.length} of ${resultCount}` : resultCount}
+            {!busy && !error && (total > 1
+              ? `${(start + 1).toLocaleString()}–${(start + visible.length).toLocaleString()} of ${resultCount}`
+              : resultCount)}
           </span>
           <div className="button-group">
             {hasFilters && <button className="button button--secondary" onClick={onClear}>Clear filters</button>}
-            <button className="button button--secondary" onClick={() => onPage(page - 1)} disabled={page === 1}>Previous</button>
+            <button className="button button--secondary" onClick={() => onPage(page - 1)} disabled={busy || Boolean(error) || page === 1}>Previous</button>
             <button className="button button--secondary" onClick={() => onPage(page + 1)}
-              disabled={start + pageSize >= matching.length}>Next</button>
+              disabled={busy || Boolean(error) || start + pageSize >= total}>Next</button>
           </div>
         </div>
       </section>
@@ -135,34 +128,17 @@ function EmployeeDirectory({ employees, filters, page, onFilter, onClear, onPage
   );
 }
 
-function salaryTimeline(employee) {
-  const salaries = [...employee.salaries].sort((first, second) => first.effectiveOn.localeCompare(second.effectiveOn));
-  const effective = salaries.filter(({ effectiveOn }) => effectiveOn <= previewDate &&
-    (!employee.lastWorkingOn || effectiveOn <= employee.lastWorkingOn)).at(-1);
-  const current = employmentStatus(employee) === "Active" ? effective : null;
-
-  const timeline = salaries.map((salary, index) => {
-    const previous = salaries[index - 1];
-    let status = "Historical";
-    if (employee.lastWorkingOn && salary.effectiveOn > employee.lastWorkingOn) status = "Unapplied";
-    else if (salary.effectiveOn > previewDate) status = "Scheduled";
-    else if (salary === current) status = "Current";
-
-    return { ...salary, previous, status };
-  }).reverse();
-
-  return { current, effective, timeline };
-}
-
 function SalaryChange({ salary }) {
   if (!salary.previous) return <span className="muted">Joining salary</span>;
   if (salary.status === "Unapplied") return <span className="muted">—</span>;
   if (salary.currency !== salary.previous.currency) return <span className="muted">Currency changed</span>;
 
-  const difference = salary.amount - salary.previous.amount;
+  if (!salary.change) return <span className="muted">—</span>;
+
+  const difference = BigInt(salary.change.amount);
   const percentage = new Intl.NumberFormat("en", {
     style: "percent", maximumFractionDigits: 2, signDisplay: "exceptZero",
-  }).format(difference / salary.previous.amount);
+  }).format(salary.change.percentage / 100);
   return (
     <div className={difference > 0 ? "salary-increase" : undefined}>
       {formatSalary(difference, salary.currency, true)} <span className="muted">({percentage})</span>
@@ -234,9 +210,8 @@ function EmployeeDetail({ employee, onBack, onSave }) {
   const [showForm, setShowForm] = useState(false);
   const [notice, setNotice] = useState("");
   const recordButton = useRef(null);
-  const status = employmentStatus(employee);
-  const { current, effective, timeline } = salaryTimeline(employee);
-  const displayedSalary = current ?? effective;
+  const { status, current, lastEffective, timeline } = employee;
+  const displayedSalary = current ?? lastEffective;
 
   function closeForm() {
     setShowForm(false);
@@ -246,7 +221,7 @@ function EmployeeDetail({ employee, onBack, onSave }) {
   function recordSalary(salary) {
     onSave(salary);
     closeForm();
-    setNotice(salary.effectiveOn > previewDate
+    setNotice(salary.effectiveOn > employee.asOf
       ? `Salary change scheduled for ${formatDate(salary.effectiveOn)}.`
       : `Salary change added for ${formatDate(salary.effectiveOn)}.`);
   }
@@ -259,7 +234,7 @@ function EmployeeDetail({ employee, onBack, onSave }) {
           <FocusHeading>{employee.name}</FocusHeading>
           <p>{employee.number} · {employee.role}</p>
         </div>
-        {status === "Active" && (
+        {onSave && employee.canRecordSalary && (
           <button className="button button--primary" ref={recordButton} onClick={() => {
             setNotice("");
             setShowForm(true);
@@ -318,14 +293,45 @@ function EmployeeDetail({ employee, onBack, onSave }) {
   );
 }
 
-export function EmployeePreview({ onSignOut }) {
-  const [employees, setEmployees] = useState(previewEmployees);
-  const [selected, setSelected] = useState(null);
+export function EmployeeWorkspace({ account, onSignOut, onSessionExpired }) {
   const [filters, setFilters] = useState(emptyFilters);
   const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState(null);
+  const [directory, setDirectory] = useState(null);
+  const [employee, setEmployee] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(true);
+  const [attempt, setAttempt] = useState(0);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
-  const employee = employees.find(({ number }) => number === selected);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const query = new URLSearchParams({ ...filters, page });
+    const path = selected ? `/api/employees/${encodeURIComponent(selected)}` : `/api/employees?${query}`;
+
+    const timer = setTimeout(async () => {
+      try {
+        const data = await api(path, { signal: controller.signal });
+        if (!controller.signal.aborted) {
+          if (selected) setEmployee(data);
+          else setDirectory(data);
+        }
+      } catch (failure) {
+        if (!controller.signal.aborted) {
+          if (failure.status === 401) onSessionExpired();
+          else setError(failure.status ? failure.message : "Unable to reach the server.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setBusy(false);
+      }
+    }, selected ? 0 : 150);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [filters, page, selected, attempt, onSessionExpired]);
 
   async function signOut() {
     setSigningOut(true);
@@ -339,40 +345,73 @@ export function EmployeePreview({ onSignOut }) {
     }
   }
 
+  function startLoading() {
+    setError("");
+    setBusy(true);
+  }
+
   function changeFilter(field, value) {
+    if (filters[field] === value) return;
+    startLoading();
     setFilters((previous) => ({ ...previous, [field]: value }));
     setPage(1);
   }
 
   function clearFilters() {
+    startLoading();
     setFilters(emptyFilters);
     setPage(1);
   }
 
-  function saveSalary(salary) {
-    setEmployees((previous) => previous.map((record) => record.number === selected
-      ? { ...record, salaries: [...record.salaries, salary] }
-      : record));
+  function changePage(nextPage) {
+    startLoading();
+    setPage(nextPage);
   }
+
+  function selectEmployee(number) {
+    startLoading();
+    setEmployee(null);
+    setSelected(number);
+  }
+
+  function retry() {
+    startLoading();
+    setAttempt((previous) => previous + 1);
+  }
+
+  const asOf = employee?.asOf ?? directory?.asOf;
 
   return (
     <div className="workspace">
       <header className="workspace-header">
         <div className="workspace-header__inner">
           <div className="workspace-brand"><strong>ACME</strong><span>Salary Management</span></div>
-          <button className="button button--secondary" onClick={signOut} disabled={signingOut}>
-            {signingOut ? "Signing out…" : "Sign out"}
-          </button>
+          <div className="workspace-account">
+            <span>{account.name}</span>
+            <button className="button button--secondary" onClick={signOut} disabled={signingOut}>
+              {signingOut ? "Signing out…" : "Sign out"}
+            </button>
+          </div>
         </div>
       </header>
       <main className="workspace-main">
         {signOutError && <p className="form-error" role="alert">{signOutError}</p>}
-        <p className="preview-banner">Design preview · Sample data as of {formatDate(previewDate)} · Changes reset on refresh or sign-out</p>
-        {employee ? (
-          <EmployeeDetail key={employee.number} employee={employee} onBack={() => setSelected(null)} onSave={saveSalary} />
+        {asOf && <p className="workspace-date">Compensation as of {formatDate(asOf)}</p>}
+        {selected ? (
+          employee ? (
+            <EmployeeDetail key={employee.number} employee={employee} onBack={() => selectEmployee(null)} />
+          ) : (
+            <>
+              <button className="back-link" onClick={() => selectEmployee(null)}>← Back to employees</button>
+              {error ? <>
+                <p role="alert">{error}</p>
+                <button className="button button--secondary" onClick={retry}>Try again</button>
+              </> : <p role="status">Loading salary history…</p>}
+            </>
+          )
         ) : (
-          <EmployeeDirectory employees={employees} filters={filters} page={page}
-            onFilter={changeFilter} onClear={clearFilters} onPage={setPage} onSelect={setSelected} />
+          <EmployeeDirectory data={directory} busy={busy} error={error} filters={filters} onFilter={changeFilter}
+            onClear={clearFilters} onPage={changePage} onSelect={selectEmployee} onRetry={retry} />
         )}
       </main>
     </div>

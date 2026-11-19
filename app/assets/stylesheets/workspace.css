@@ -39,6 +39,17 @@
   font-size: 0.9rem;
 }
 
+.workspace-account {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-size: 0.85rem;
+}
+
+.workspace-account span {
+  text-align: end;
+}
+
 .workspace-header .button {
   flex-shrink: 0;
   border-color: #73958a;
@@ -58,7 +69,7 @@
   padding-bottom: 3rem;
 }
 
-.preview-banner {
+.workspace-date {
   margin: 0;
   padding-block: 1rem;
   border-bottom: 1px solid #dbe2da;

@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { EmployeePreview } from "./employee-preview.jsx";
+import { EmployeeWorkspace } from "./employee-workspace.jsx";
 import { api } from "./api.js";
 
 function SignIn({ onSignIn }) {
@@ -75,6 +75,7 @@ function App() {
   const [account, setAccount] = useState(undefined);
   const [connectionError, setConnectionError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const endSession = useCallback(() => setAccount(null), []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -104,7 +105,7 @@ function App() {
   }
 
   return account
-    ? <EmployeePreview onSignOut={signOut} />
+    ? <EmployeeWorkspace account={account} onSignOut={signOut} onSessionExpired={endSession} />
     : <SignIn onSignIn={setAccount} />;
 }
 
