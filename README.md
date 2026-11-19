@@ -2,6 +2,8 @@
 
 Rails serves the React app and will serve the API from the same origin. SQLite stores the application data on disk.
 
+The [54-second walkthrough](docs/acme-assessment-demo.mp4) shows a scheduled salary change, a CSV export, a filtered compensation report, and how an Access Admin grants and revokes HR access. All employee data in the video is synthetic.
+
 ## Local development
 
 Install the Ruby version in `.ruby-version` and Node.js 24. Then run:
