@@ -41,6 +41,13 @@ module Api
       render json: { error: "That employee number already exists." }, status: :unprocessable_entity
     end
 
+    def import
+      result = EmployeeCsvImport.new.call(params[:file], actor: current_account)
+      render json: result, status: result[:error] ? :unprocessable_entity : :created
+    rescue EmployeeCsvImport::InvalidFile => error
+      render json: { error: error.message }, status: :unprocessable_entity
+    end
+
     def update
       employee = find_employee
       employee.update!(EmployeeInput.new.profile(params.permit(*EmployeeInput::PROFILE_FIELDS)))

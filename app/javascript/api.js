@@ -4,6 +4,7 @@ export class ApiError extends Error {
     this.status = status;
     this.code = data.code;
     this.accountRole = data.accountRole;
+    this.details = data;
   }
 }
 
@@ -11,11 +12,12 @@ export async function api(path, { method = "GET", body, signal } = {}) {
   const headers = { Accept: "application/json" };
   const csrf = document.querySelector('meta[name="csrf-token"]');
   if (method !== "GET" && csrf) headers["X-CSRF-Token"] = csrf.content;
-  if (body) headers["Content-Type"] = "application/json";
+  const multipart = body instanceof FormData;
+  if (body && !multipart) headers["Content-Type"] = "application/json";
 
   const response = await fetch(path, {
     method, headers, signal, credentials: "same-origin",
-    body: body ? JSON.stringify(body) : undefined,
+    body: multipart ? body : body && JSON.stringify(body),
   });
   const data = await response.json().catch(() => ({}));
   if (data.csrfToken && csrf) csrf.content = data.csrfToken;

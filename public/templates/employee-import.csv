@@ -1,0 +1,4 @@
+employee_number,full_name,country_code,department,job_role,joined_on,annual_salary,currency
+CSV-001,Aarav Mehta,IN,Engineering,Software Engineer,2026-10-01,1200000,INR
+CSV-002,Mia Brooks,US,Finance,Financial Analyst,2026-11-01,95000.50,USD
+CSV-003,Yui Sato,JP,Operations,Operations Specialist,2026-11-19,6500000,JPY

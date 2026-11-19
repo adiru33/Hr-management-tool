@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { api } from "./api.js";
 import { Workspace } from "./workspace.jsx";
 import { DepartureForm, EmployeeForm } from "./employee-form.jsx";
+import { EmployeeImportForm } from "./employee-import-form.jsx";
 
 const emptyFilters = { search: "", country: "", department: "", role: "", status: "" };
 const countryNames = { DE: "Germany", GB: "United Kingdom", IN: "India", JP: "Japan", US: "United States" };
@@ -49,7 +50,7 @@ function Filter({ field, label, value, options, renderValue = (option) => option
   );
 }
 
-function EmployeeDirectory({ data, busy, error, filters, onFilter, onClear, onPage, onSelect, onRetry, onAdd }) {
+function EmployeeDirectory({ data, busy, error, filters, onFilter, onClear, onPage, onSelect, onRetry, onAdd, onImport }) {
   const { employees: visible = [], page = 1, pageSize = 25, total = 0, filters: options } = data ?? {};
   const start = (page - 1) * pageSize;
   const hasFilters = Object.values(filters).some(Boolean);
@@ -62,7 +63,10 @@ function EmployeeDirectory({ data, busy, error, filters, onFilter, onClear, onPa
           <FocusHeading>Employees</FocusHeading>
           <p>Find an employee and open their salary history.</p>
         </div>
-        <button className="button button--primary" onClick={onAdd} disabled={!options}>Add employee</button>
+        <div className="button-group">
+          <button className="button button--secondary" onClick={onImport}>Import CSV</button>
+          <button className="button button--primary" onClick={onAdd} disabled={!options}>Add employee</button>
+        </div>
       </div>
       <section className="workspace-card" aria-label="Employee directory">
         <div className="directory-filters">
@@ -419,7 +423,10 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionError }) {
   return (
     <Workspace account={account} onSignOut={onSignOut}>
         {asOf && <p className="workspace-date">Compensation as of {formatDate(asOf)}</p>}
-        {profileMode ? (
+        {profileMode === "import" ? (
+          <EmployeeImportForm onUpload={(file) => write("/api/employees/import", "POST", file)}
+            onBack={() => { startLoading(); setProfileMode(null); }} />
+        ) : profileMode ? (
           <EmployeeForm employee={profileMode === "edit" ? employee : null} options={directory.filters}
             countries={countryNames} onSave={saveProfile} onCancel={() => setProfileMode(null)} />
         ) : selected ? (
@@ -440,7 +447,7 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionError }) {
         ) : (
           <EmployeeDirectory data={directory} busy={busy} error={error} filters={filters} onFilter={changeFilter}
             onClear={clearFilters} onPage={changePage} onSelect={selectEmployee} onRetry={retry}
-            onAdd={() => setProfileMode("add")} />
+            onAdd={() => setProfileMode("add")} onImport={() => setProfileMode("import")} />
         )}
     </Workspace>
   );

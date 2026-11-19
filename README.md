@@ -17,6 +17,14 @@ Open [localhost:3000](http://localhost:3000). After editing React code, run `npm
 
 In the seeded local development database, sign in as `hr1@acme.example` with the development password `local-acme-hr-one`. Search for `DEMO-00001`, open the employee's salary history, and select **Record salary change**. A salary change with a future effective date appears as **Scheduled**. Saved salary changes are written to SQLite and remain after refresh.
 
+Use **Add employee** to create a profile and its starting annual salary in one transaction. Open a profile to edit its name, work country, department, and job role, or record its last working day. The starting salary and later salary changes stay in the history after departure.
+
+### Import new employees from CSV
+
+Choose **Employees → Import CSV**, then download the [sample CSV](public/templates/employee-import.csv). Keep the header names, save as UTF-8, and use existing department and job role names. Use `YYYY-MM-DD` for the joining date and enter the full annual salary in the chosen currency, without grouping separators or currency symbols. The upload supports up to 10,000 employees and 5 MB per file.
+
+Use a unique employee number for each new hire. If any row fails validation, Rails rolls back the import and shows row numbers and error messages. Reusing an existing employee number is a validation error. The CSV creates employees and their joining salaries.
+
 ## Demo data
 
 Run `bin/rails db:seed` to load 10,000 synthetic employees across five countries and two HR accounts. Each salary history starts with the joining salary and includes a raise on each completed work anniversary through 19 November 2026 or the employee’s last working day, whichever comes first. This pattern belongs to the demo data. HR records salary changes manually in the application.

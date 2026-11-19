@@ -1,4 +1,5 @@
 require "test_helper"
+require "tempfile"
 
 class HrWorkflowTest < ActionDispatch::IntegrationTest
   setup do
@@ -262,6 +263,79 @@ class HrWorkflowTest < ActionDispatch::IntegrationTest
     assert_response :forbidden
   end
 
+  test "CSV import creates employees and joining salaries with the signed-in HR author" do
+    sign_in
+    csv = <<~CSV
+      #{csv_headers}
+      CSV-001,"Mehra, Asha",IN,Engineering,Software Engineer,2026-10-01,1200000.50,INR
+      CSV-002,Hana Watanabe,JP,Engineering,Software Engineer,2026-10-02,6000000,JPY
+    CSV
+
+    assert_difference "Employee.count", 2 do
+      assert_difference "SalaryRecord.count", 2 do
+        upload_csv("\uFEFF" + csv)
+        assert_response :created
+      end
+    end
+    assert_equal 2, response.parsed_body.fetch("imported")
+    employee = Employee.find_by!(employee_number: "CSV-001")
+    salary = employee.salary_records.sole
+    assert_equal "Mehra, Asha", employee.full_name
+    assert_equal employee.joined_on, salary.effective_on
+    assert_equal 120_000_050, salary.amount_minor
+    assert_equal @manager, salary.recorded_by_hr_account
+  end
+
+  test "CSV import reports row errors and rolls back the whole file" do
+    existing = create_employee("EXISTS-1", "Existing employee")
+    sign_in
+    csv = <<~CSV
+      #{csv_headers}
+      CSV-001,Asha Shah,IN,Engineering,Software Engineer,2026-10-01,1200000,INR
+      exists-1,An existing number,IN,Engineering,Software Engineer,2026-10-01,1200000,INR
+      csv-001,A duplicate in the file,IN,Engineering,Software Engineer,2026-10-01,1200000,INR
+      CSV-003,Invalid amount,JP,Engineering,Software Engineer,2026-10-01,6500000.50,JPY
+      CSV-004,Unknown job role,IN,Engineering,Unknown,2026-10-01,1200000,INR
+    CSV
+
+    assert_no_difference ["Employee.count", "SalaryRecord.count"] do
+      upload_csv(csv)
+      assert_response :unprocessable_entity
+    end
+    errors = response.parsed_body.fetch("rows")
+    assert_equal [3, 4, 5, 6], errors.pluck("row")
+    assert_match(/already been taken/, errors[0].fetch("message"))
+    assert_match(/more than once/, errors[1].fetch("message"))
+    assert_match(/0 decimal places/, errors[2].fetch("message"))
+    assert_match(/existing job role/, errors[3].fetch("message"))
+    assert_equal "Existing employee", existing.reload.full_name
+  end
+
+  test "CSV upload rejects missing columns, malformed input, and unauthorized requests" do
+    upload_csv("#{csv_headers}\n")
+    assert_response :unauthorized
+
+    sign_in
+    upload_csv("employee_number,country_code\nNEW,IN\n")
+    assert_response :unprocessable_entity
+    assert_match(/CSV headers/, response.parsed_body.fetch("error"))
+
+    upload_csv("#{csv_headers}\nNEW,\"Unclosed name\n")
+    assert_response :unprocessable_entity
+    assert_match(/well-formed CSV/, response.parsed_body.fetch("error"))
+  end
+
+  test "CSV uploads over the row limit fail before creating records" do
+    sign_in
+    row = "BULK-001,Asha Shah,IN,Engineering,Software Engineer,2026-10-01,1200000,INR\n"
+
+    assert_no_difference ["Employee.count", "SalaryRecord.count"] do
+      upload_csv("#{csv_headers}\n" + row * (EmployeeCsvImport::MAX_ROWS + 1))
+      assert_response :unprocessable_entity
+    end
+    assert_match(/at most 10000 employees/, response.parsed_body.fetch("error"))
+  end
+
   private
 
   def hire_input
@@ -270,6 +344,19 @@ class HrWorkflowTest < ActionDispatch::IntegrationTest
       department: @department.name, job_role: @role.name, joined_on: Date.current.iso8601,
       annual_salary: "1100000.50", currency: "INR"
     }
+  end
+
+  def csv_headers
+    "employee_number,full_name,country_code,department,job_role,joined_on,annual_salary,currency"
+  end
+
+  def upload_csv(content)
+    Tempfile.create(["employee-import", ".csv"]) do |file|
+      file.write(content)
+      file.flush
+      upload = Rack::Test::UploadedFile.new(file.path, "text/csv")
+      post import_api_employees_path, params: { file: upload }
+    end
   end
 
   def create_employee(number, name, **overrides)

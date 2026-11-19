@@ -10,7 +10,9 @@ class Employee < ApplicationRecord
   normalizes :full_name, with: ->(name) { name.strip }
   normalizes :country_code, with: ->(code) { code.strip.upcase }
 
-  validates :employee_number, presence: true, uniqueness: true
+  validates :employee_number, presence: true
+  # CSV imports check existing numbers in batches and retain the database uniqueness constraint.
+  validates :employee_number, uniqueness: true, unless: -> { validation_context == :csv_import }
   validates :full_name, :joined_on, presence: true
   validates :country_code, inclusion: { in: COUNTRY_CODES }
   validates :last_working_on, comparison: { greater_than_or_equal_to: :joined_on },

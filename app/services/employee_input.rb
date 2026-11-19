@@ -19,6 +19,11 @@ class EmployeeInput
   end
 
   def hire!(input, actor:)
+    employee, salary = hiring_attributes(input)
+    Employee.hire!(attributes: employee, salary: salary, recorded_by: actor)
+  end
+
+  def hiring_attributes(input)
     number = text(input[:employee_number], "employee number", maximum: 50)
     unless /\A[A-Za-z0-9][A-Za-z0-9._-]*\z/.match?(number)
       raise InvalidInput, "Employee number may contain letters, numbers, periods, underscores, and hyphens."
@@ -32,11 +37,8 @@ class EmployeeInput
       raise InvalidInput, error.message
     end
 
-    Employee.hire!(
-      attributes: profile(input).merge(employee_number: number, joined_on: self.class.date(input[:joined_on], "joining date")),
-      salary: { amount_minor: amount_minor, currency_code: currency },
-      recorded_by: actor
-    )
+    employee = profile(input).merge(employee_number: number, joined_on: self.class.date(input[:joined_on], "joining date"))
+    [employee, { amount_minor: amount_minor, currency_code: currency }]
   end
 
   def self.date(value, label)
