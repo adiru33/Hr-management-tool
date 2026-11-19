@@ -61,11 +61,7 @@ class ManageHrAccess
   def record_departure(target, date)
     raise InvalidOperation, "Only an HR manager’s departure can be recorded here." unless target.role_hr_manager?
 
-    was_active = target.active_on?(@date)
-    target.employee.update!(last_working_on: date)
-    if was_active != target.active_on?(@date)
-      target.update!(access_version: target.access_version + 1)
-    end
+    target.employee.record_departure!(date, as_of: @date)
   end
 
   def parse_date(value)

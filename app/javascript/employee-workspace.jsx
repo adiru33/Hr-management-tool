@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "./api.js";
 import { Workspace } from "./workspace.jsx";
+import { DepartureForm, EmployeeForm } from "./employee-form.jsx";
 
 const emptyFilters = { search: "", country: "", department: "", role: "", status: "" };
 const countryNames = { DE: "Germany", GB: "United Kingdom", IN: "India", JP: "Japan", US: "United States" };
@@ -48,7 +49,7 @@ function Filter({ field, label, value, options, renderValue = (option) => option
   );
 }
 
-function EmployeeDirectory({ data, busy, error, filters, onFilter, onClear, onPage, onSelect, onRetry }) {
+function EmployeeDirectory({ data, busy, error, filters, onFilter, onClear, onPage, onSelect, onRetry, onAdd }) {
   const { employees: visible = [], page = 1, pageSize = 25, total = 0, filters: options } = data ?? {};
   const start = (page - 1) * pageSize;
   const hasFilters = Object.values(filters).some(Boolean);
@@ -56,9 +57,12 @@ function EmployeeDirectory({ data, busy, error, filters, onFilter, onClear, onPa
 
   return (
     <>
-      <div className="workspace-heading">
-        <FocusHeading>Employees</FocusHeading>
-        <p>Find an employee and open their salary history.</p>
+      <div className="workspace-heading employee-heading">
+        <div>
+          <FocusHeading>Employees</FocusHeading>
+          <p>Find an employee and open their salary history.</p>
+        </div>
+        <button className="button button--primary" onClick={onAdd} disabled={!options}>Add employee</button>
       </div>
       <section className="workspace-card" aria-label="Employee directory">
         <div className="directory-filters">
@@ -205,16 +209,17 @@ function SalaryChangeForm({ employee, current, onSave, onCancel }) {
   );
 }
 
-function EmployeeDetail({ employee, onBack, onSave }) {
-  const [showForm, setShowForm] = useState(false);
-  const [notice, setNotice] = useState("");
+function EmployeeDetail({ employee, onBack, onSave, onEdit, onDeparture, profileNotice }) {
+  const [form, setForm] = useState(null);
+  const [notice, setNotice] = useState(profileNotice);
   const recordButton = useRef(null);
+  const departureButton = useRef(null);
   const { status, current, lastEffective, timeline } = employee;
   const displayedSalary = current ?? lastEffective;
 
   function closeForm() {
-    setShowForm(false);
-    recordButton.current?.focus();
+    setForm(null);
+    (form === "departure" ? departureButton : recordButton).current?.focus();
   }
 
   async function recordSalary(input) {
@@ -226,6 +231,12 @@ function EmployeeDetail({ employee, onBack, onSave }) {
       : `Salary change added for ${formatDate(salary.effectiveOn)}.`);
   }
 
+  async function recordDeparture(input) {
+    await onDeparture(employee.number, input);
+    closeForm();
+    setNotice(`Last working day recorded as ${formatDate(input.last_working_on)}.`);
+  }
+
   return (
     <>
       <button className="back-link" onClick={onBack}>← Back to employees</button>
@@ -234,12 +245,21 @@ function EmployeeDetail({ employee, onBack, onSave }) {
           <FocusHeading>{employee.name}</FocusHeading>
           <p>{employee.number} · {employee.role}</p>
         </div>
-        {employee.canRecordSalary && (
-          <button className="button button--primary" ref={recordButton} onClick={() => {
-            setNotice("");
-            setShowForm(true);
-          }}>Record salary change</button>
-        )}
+        <div className="button-group">
+          <button className="button button--secondary" onClick={onEdit}>Edit employee</button>
+          {employee.canRecordDeparture && (
+            <button className="button button--secondary" ref={departureButton} onClick={() => {
+              setNotice("");
+              setForm("departure");
+            }}>{employee.lastWorkingOn ? "Update last working day" : "Record departure"}</button>
+          )}
+          {employee.canRecordSalary && (
+            <button className="button button--primary" ref={recordButton} onClick={() => {
+              setNotice("");
+              setForm("salary");
+            }}>Record salary change</button>
+          )}
+        </div>
       </div>
 
       <dl className="employee-summary">
@@ -261,7 +281,8 @@ function EmployeeDetail({ employee, onBack, onSave }) {
         </div>
       </dl>
 
-      {showForm && <SalaryChangeForm employee={employee} current={current} onSave={recordSalary} onCancel={closeForm} />}
+      {form === "salary" && <SalaryChangeForm employee={employee} current={current} onSave={recordSalary} onCancel={closeForm} />}
+      {form === "departure" && <DepartureForm employee={employee} onSave={recordDeparture} onCancel={closeForm} />}
       {notice && <p className="workspace-notice" role="status">{notice}</p>}
       <section className="workspace-card" aria-labelledby="salary-history-heading">
         <div className="section-heading">
@@ -302,8 +323,11 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionError }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
   const [attempt, setAttempt] = useState(0);
+  const [profileMode, setProfileMode] = useState(null);
+  const [profileNotice, setProfileNotice] = useState("");
 
   useEffect(() => {
+    if (profileMode) return;
     const controller = new AbortController();
     const query = new URLSearchParams({ ...filters, page });
     const path = selected ? `/api/employees/${encodeURIComponent(selected)}` : `/api/employees?${query}`;
@@ -328,7 +352,7 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionError }) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [filters, page, selected, attempt, onSessionError]);
+  }, [filters, page, selected, attempt, profileMode, onSessionError]);
 
   function startLoading() {
     setError("");
@@ -356,6 +380,7 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionError }) {
   function selectEmployee(number) {
     startLoading();
     setEmployee(null);
+    setProfileNotice("");
     setSelected(number);
   }
 
@@ -364,15 +389,29 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionError }) {
     setAttempt((previous) => previous + 1);
   }
 
-  async function saveSalary(number, input) {
+  async function write(path, method, body) {
     try {
-      const updated = await api(`/api/employees/${encodeURIComponent(number)}/salary_records`, { method: "POST", body: input });
-      setEmployee((current) => current?.number === number ? updated : current);
-      return updated;
+      return await api(path, { method, body });
     } catch (failure) {
       onSessionError(failure);
       throw failure;
     }
+  }
+
+  async function updateEmployee(number, path, method, input) {
+    const updated = await write(`/api/employees/${encodeURIComponent(number)}${path}`, method, input);
+    setEmployee((current) => current?.number === number ? updated : current);
+    return updated;
+  }
+
+  async function saveProfile(input) {
+    const editing = profileMode === "edit";
+    const path = editing ? `/api/employees/${encodeURIComponent(selected)}` : "/api/employees";
+    const updated = await write(path, editing ? "PATCH" : "POST", input);
+    setEmployee(updated);
+    setSelected(updated.number);
+    setProfileNotice(editing ? "Employee profile updated." : "Employee and starting salary created.");
+    setProfileMode(null);
   }
 
   const asOf = employee?.asOf ?? directory?.asOf;
@@ -380,10 +419,15 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionError }) {
   return (
     <Workspace account={account} onSignOut={onSignOut}>
         {asOf && <p className="workspace-date">Compensation as of {formatDate(asOf)}</p>}
-        {selected ? (
+        {profileMode ? (
+          <EmployeeForm employee={profileMode === "edit" ? employee : null} options={directory.filters}
+            countries={countryNames} onSave={saveProfile} onCancel={() => setProfileMode(null)} />
+        ) : selected ? (
           employee ? (
             <EmployeeDetail key={employee.number} employee={employee}
-              onBack={() => selectEmployee(null)} onSave={saveSalary} />
+              profileNotice={profileNotice} onBack={() => selectEmployee(null)} onEdit={() => setProfileMode("edit")}
+              onSave={(number, input) => updateEmployee(number, "/salary_records", "POST", input)}
+              onDeparture={(number, input) => updateEmployee(number, "/departure", "PATCH", input)} />
           ) : (
             <>
               <button className="back-link" onClick={() => selectEmployee(null)}>← Back to employees</button>
@@ -395,7 +439,8 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionError }) {
           )
         ) : (
           <EmployeeDirectory data={directory} busy={busy} error={error} filters={filters} onFilter={changeFilter}
-            onClear={clearFilters} onPage={changePage} onSelect={selectEmployee} onRetry={retry} />
+            onClear={clearFilters} onPage={changePage} onSelect={selectEmployee} onRetry={retry}
+            onAdd={() => setProfileMode("add")} />
         )}
     </Workspace>
   );

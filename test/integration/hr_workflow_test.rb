@@ -199,7 +199,78 @@ class HrWorkflowTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "HR can create a profile and starting salary together" do
+    sign_in
+    assert_difference("Employee.count", 1) do
+      assert_difference("SalaryRecord.count", 1) do
+        post api_employees_path, params: hire_input, as: :json
+        assert_response :created
+      end
+    end
+    employee = Employee.find_by!(employee_number: "NEW.001")
+    salary = employee.salary_records.sole
+    assert_equal employee.joined_on, salary.effective_on
+    assert_equal 110_000_050, salary.amount_minor
+    assert_equal @manager, salary.recorded_by_hr_account
+
+    add_salary(employee, amount: "1200000", date: Date.current.tomorrow.iso8601)
+    assert_response :created
+  end
+
+  test "invalid hiring details create neither an employee nor a salary" do
+    sign_in
+    assert_no_difference ["Employee.count", "SalaryRecord.count"] do
+      [{ annual_salary: "120.003" }, { department: "Unknown" }, { joined_on: "2026-02-30" }].each do |overrides|
+        post api_employees_path, params: hire_input.merge(overrides), as: :json
+        assert_response :unprocessable_entity
+      end
+    end
+  end
+
+  test "editing a profile leaves its identifier, joined date, and salary history intact" do
+    target = create_employee("EMP-001", "Asha Shah")
+    starting = record_salary(target, amount: 100_000_000, on: target.joined_on)
+    sign_in
+
+    patch api_employee_path(target.employee_number), params: hire_input.merge(full_name: "Asha Rao", country_code: "GB"),
+      as: :json
+    assert_response :success
+    assert_equal "Asha Rao", target.reload.full_name
+    assert_equal "GB", target.country_code
+    assert_equal "EMP-001", target.employee_number
+    assert_equal starting.effective_on, target.joined_on
+    assert_equal [starting.id], target.salary_records.ids
+  end
+
+  test "recording departure retains history and excludes future salaries" do
+    target = create_employee("EMP-001", "Asha Shah")
+    record_salary(target, amount: 100_000_000, on: target.joined_on)
+    record_salary(target, amount: 120_000_000, on: Date.current.tomorrow)
+    sign_in
+
+    patch departure_api_employee_path(target.employee_number), params: { last_working_on: Date.current.yesterday.iso8601 },
+      as: :json
+    assert_response :success
+    detail = response.parsed_body
+    assert_equal "Former", detail.fetch("status")
+    assert_nil detail.fetch("current")
+    assert_equal ["Unapplied", "Historical"], detail.fetch("timeline").pluck("status")
+    assert_equal 2, target.salary_records.count
+
+    patch departure_api_employee_path(@manager.employee.employee_number), params: { last_working_on: Date.current.iso8601 },
+      as: :json
+    assert_response :forbidden
+  end
+
   private
+
+  def hire_input
+    {
+      employee_number: "NEW.001", full_name: "Asha New", country_code: "IN",
+      department: @department.name, job_role: @role.name, joined_on: Date.current.iso8601,
+      annual_salary: "1100000.50", currency: "INR"
+    }
+  end
 
   def create_employee(number, name, **overrides)
     Employee.create!({

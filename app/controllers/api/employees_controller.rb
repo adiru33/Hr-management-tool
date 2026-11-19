@@ -3,6 +3,8 @@ module Api
     PAGE_SIZE = 25
 
     before_action :require_hr_account
+    rescue_from EmployeeInput::InvalidInput, ActiveRecord::RecordInvalid, with: :invalid_employee
+    rescue_from ActiveRecord::StatementTimeout, with: :database_busy
 
     def index
       employees = filtered_employees
@@ -22,13 +24,39 @@ module Api
           countries: Employee::COUNTRY_CODES,
           departments: Department.order(:name).pluck(:name),
           roles: JobRole.order(:name).pluck(:name),
-          statuses: %w[Active Former Upcoming]
+          statuses: %w[Active Former Upcoming],
+          currencies: SalaryRecord::CURRENCY_PRECISIONS.keys
         }
       }
     end
 
     def show
       render json: details(find_employee)
+    end
+
+    def create
+      employee = EmployeeInput.new.hire!(params.permit(*EmployeeInput::HIRE_FIELDS), actor: current_account)
+      render json: details(employee), status: :created
+    rescue ActiveRecord::RecordNotUnique
+      render json: { error: "That employee number already exists." }, status: :unprocessable_entity
+    end
+
+    def update
+      employee = find_employee
+      employee.update!(EmployeeInput.new.profile(params.permit(*EmployeeInput::PROFILE_FIELDS)))
+      render json: details(employee)
+    end
+
+    def departure
+      employee = find_employee
+      if employee.id == current_account.employee_id
+        return render json: { error: "An Access Admin or another HR manager must record your departure." },
+          status: :forbidden
+      end
+
+      last_day = EmployeeInput.date(params[:last_working_on], "last working day")
+      employee.record_departure!(last_day, as_of: business_date)
+      render json: details(employee)
     end
 
     def create_salary
@@ -51,8 +79,6 @@ module Api
       render json: details(employee), status: :created
     rescue ActiveRecord::RecordNotUnique
       duplicate_salary
-    rescue ActiveRecord::StatementTimeout
-      render json: { error: "The database is busy. Please try again." }, status: :service_unavailable
     rescue ActiveRecord::RecordInvalid => error
       if error.record.errors.of_kind?(:effective_on, :taken)
         duplicate_salary
@@ -64,6 +90,15 @@ module Api
     end
 
     private
+
+    def invalid_employee(error)
+      message = error.is_a?(ActiveRecord::RecordInvalid) ? error.record.errors.full_messages.to_sentence : error.message
+      render json: { error: message }, status: :unprocessable_entity
+    end
+
+    def database_busy
+      render json: { error: "The database is busy. Please try again." }, status: :service_unavailable
+    end
 
     def parse_effective_date(value)
       unless value.is_a?(String) && /\A\d{4}-\d{2}-\d{2}\z/.match?(value)
@@ -149,6 +184,7 @@ module Api
         joinedOn: employee.joined_on, lastWorkingOn: employee.last_working_on,
         current: salary_data(current), lastEffective: salary_data(last_effective), timeline: timeline.reverse,
         canRecordSalary: active && employee.id != current_account.employee_id,
+        canRecordDeparture: employee.id != current_account.employee_id,
         asOf: business_date,
         currencies: SalaryRecord::CURRENCY_PRECISIONS
       )

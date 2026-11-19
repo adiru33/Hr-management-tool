@@ -30,6 +30,14 @@ class Employee < ApplicationRecord
     end
   end
 
+  def record_departure!(date, as_of: Date.current)
+    with_lock do
+      was_active = employed_on?(as_of)
+      update!(last_working_on: date)
+      hr_account&.increment!(:access_version) if was_active != employed_on?(as_of)
+    end
+  end
+
   def employed_on?(date)
     joined_on.present? && joined_on <= date && (last_working_on.nil? || last_working_on >= date)
   end
