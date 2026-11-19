@@ -13,6 +13,10 @@ bin/dev
 
 Open [localhost:3000](http://localhost:3000). After editing React code, run `npm run build` and refresh. Run `bin/rails test` after building the assets. Tests run in a single process by default.
 
+## Try the HR workflow
+
+In the seeded local development database, sign in as `hr1@acme.example` with the development password `local-acme-hr-one`. Search for `DEMO-00001`, open the employee's salary history, and select **Record salary change**. A salary change with a future effective date appears as **Scheduled**. Saved salary changes are written to SQLite and remain after refresh.
+
 ## Demo data
 
 Run `bin/rails db:seed` to load 10,000 synthetic employees across five countries and two HR accounts. Each salary history starts with the joining salary and includes a raise on each completed work anniversary through 19 November 2026 or the employee’s last working day, whichever comes first. This pattern belongs to the demo data. HR records salary changes manually in the application.

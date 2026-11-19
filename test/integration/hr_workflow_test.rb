@@ -39,14 +39,16 @@ class HrWorkflowTest < ActionDispatch::IntegrationTest
   end
 
   test "retains access on the last working day and ends an existing session afterward" do
+    travel_to Time.zone.local(2026, 11, 19, 23, 59)
     @manager.employee.update!(last_working_on: Date.current)
     sign_in
 
-    travel 1.day do
-      get api_session_path, as: :json
-      assert_response :success
-      assert_nil response.parsed_body.fetch("account")
-    end
+    travel 2.minutes
+    get api_session_path, as: :json
+    assert_response :success
+    assert_nil response.parsed_body.fetch("account")
+  ensure
+    travel_back
   end
 
   test "Rails rejects a sign-in request without a valid CSRF token" do
@@ -137,6 +139,65 @@ class HrWorkflowTest < ActionDispatch::IntegrationTest
     refute response.parsed_body.fetch("canRecordSalary")
   end
 
+  test "saving a future salary persists it with its author and leaves today's salary unchanged" do
+    target = create_employee("EMP-001", "Asha Shah")
+    record_salary(target, amount: 100_000_000, on: target.joined_on)
+    tomorrow = Date.current.tomorrow
+    sign_in
+
+    assert_difference "SalaryRecord.count", 1 do
+      add_salary(target, amount: "1100000.50", date: tomorrow.iso8601)
+      assert_response :created
+    end
+    detail = response.parsed_body
+    assert_equal "100000000", detail.dig("current", "amount")
+    assert_equal "Scheduled", detail.dig("timeline", 0, "status")
+    assert_equal @manager.id, target.salary_records.find_by!(effective_on: tomorrow).recorded_by_hr_account_id
+
+    get api_employee_path(target.employee_number), as: :json
+    assert_equal "110000050", response.parsed_body.dig("timeline", 0, "amount")
+    travel_to tomorrow do
+      sign_in
+      get api_employee_path(target.employee_number), as: :json
+      assert_response :success
+      assert_equal "110000050", response.parsed_body.dig("current", "amount")
+      assert_equal "Current", response.parsed_body.dig("timeline", 0, "status")
+    end
+  end
+
+  test "salary creation requires HR access and blocks self edits" do
+    target = @manager.employee
+    assert_no_difference "SalaryRecord.count" do
+      add_salary(target, amount: "1500000", date: Date.current.iso8601)
+      assert_response :unauthorized
+
+      sign_in
+      add_salary(target, amount: "1500000", date: Date.current.iso8601)
+      assert_response :unprocessable_entity
+      assert_match(/cannot change their own salary/, response.parsed_body.fetch("error"))
+    end
+  end
+
+  test "salary creation rejects duplicate dates, invalid amounts, and invalid dates" do
+    target = create_employee("EMP-001", "Asha Shah", last_working_on: Date.current.tomorrow)
+    record_salary(target, amount: 100_000_000, on: target.joined_on)
+    sign_in
+
+    assert_no_difference "SalaryRecord.count" do
+      cases = [
+        ["1200000", target.joined_on.iso8601, /already has a salary record/],
+        ["1200000.005", Date.current.iso8601, /at most 2 decimal places/],
+        ["1200000", "2026-02-30", /valid effective date/],
+        ["1200000", (target.last_working_on + 1).iso8601, /employment dates/]
+      ]
+      cases.each do |amount, date, message|
+        add_salary(target, amount: amount, date: date)
+        assert_response :unprocessable_entity
+        assert_match(message, response.parsed_body.fetch("error"))
+      end
+    end
+  end
+
   private
 
   def create_employee(number, name, **overrides)
@@ -155,5 +216,10 @@ class HrWorkflowTest < ActionDispatch::IntegrationTest
     employee.salary_records.create!(
       amount_minor: amount, currency_code: "INR", effective_on: on, recorded_by_hr_account: @manager
     )
+  end
+
+  def add_salary(employee, amount:, date:)
+    post api_employee_salary_records_path(employee.employee_number),
+      params: { amount: amount, currency: "INR", effective_on: date }, as: :json
   end
 end

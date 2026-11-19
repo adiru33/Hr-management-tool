@@ -4,6 +4,7 @@ Rails.application.routes.draw do
   namespace :api, defaults: { format: :json } do
     resource :session, only: %i[show create destroy]
     resources :employees, only: %i[index show], param: :number
+    post "employees/:number/salary_records", to: "employees#create_salary", as: :employee_salary_records
   end
   get "up" => "rails/health#show", as: :rails_health_check
 end

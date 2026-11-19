@@ -31,7 +31,54 @@ module Api
       render json: details(find_employee)
     end
 
+    def create_salary
+      input = params.permit(:amount, :currency, :effective_on)
+      currency = input[:currency].to_s.strip.upcase
+      effective_on = parse_effective_date(input[:effective_on])
+      amount = input[:amount]
+      raise ArgumentError, "Enter a valid annual base salary." unless amount.is_a?(String) && amount.bytesize <= 32
+
+      amount_minor = SalaryRecord.minor_units_for(amount.strip, currency)
+      employee = Employee.transaction do
+        record = find_employee
+        record.salary_records.create!(
+          amount_minor: amount_minor, currency_code: currency, effective_on: effective_on,
+          recorded_by_hr_account: current_hr_account
+        )
+        record
+      end
+
+      render json: details(employee), status: :created
+    rescue ActiveRecord::RecordNotUnique
+      duplicate_salary
+    rescue ActiveRecord::StatementTimeout
+      render json: { error: "The database is busy. Please try again." }, status: :service_unavailable
+    rescue ActiveRecord::RecordInvalid => error
+      if error.record.errors.of_kind?(:effective_on, :taken)
+        duplicate_salary
+      else
+        render json: { error: error.record.errors.full_messages.to_sentence }, status: :unprocessable_entity
+      end
+    rescue ArgumentError => error
+      render json: { error: error.message }, status: :unprocessable_entity
+    end
+
     private
+
+    def parse_effective_date(value)
+      unless value.is_a?(String) && /\A\d{4}-\d{2}-\d{2}\z/.match?(value)
+        raise ArgumentError, "Enter a valid effective date."
+      end
+
+      Date.iso8601(value)
+    rescue Date::Error
+      raise ArgumentError, "Enter a valid effective date."
+    end
+
+    def duplicate_salary
+      render json: { error: "This employee already has a salary record for that effective date." },
+        status: :unprocessable_entity
+    end
 
     def filtered_employees
       filters = params.permit(:search, :country, :department, :role, :status)

@@ -148,30 +148,26 @@ function SalaryChange({ salary }) {
 
 function SalaryChangeForm({ employee, current, onSave, onCancel }) {
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const heading = useRef(null);
   useEffect(() => { heading.current.focus(); }, []);
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const currency = data.get("currency");
-    const effectiveOn = data.get("effectiveOn");
-    const text = data.get("amount").trim();
-    const precision = currencyDigits[currency];
-    const [whole, fraction = ""] = text.split(".");
-    const amount = Number(whole + fraction.padEnd(precision, "0"));
-
-    if (!/^\d+(\.\d+)?$/.test(text) || fraction.length > precision || !Number.isSafeInteger(amount) || amount <= 0) {
-      setError(`Enter a positive annual salary with at most ${precision} decimal places for ${currency}.`);
-      return;
+    setError("");
+    setSaving(true);
+    try {
+      await onSave({
+        amount: data.get("amount"),
+        currency: data.get("currency"),
+        effective_on: data.get("effectiveOn"),
+      });
+    } catch (failure) {
+      setError(failure.status ? failure.message : "Unable to reach the server. Please try again.");
+    } finally {
+      setSaving(false);
     }
-
-    if (employee.salaries.some((salary) => salary.effectiveOn === effectiveOn)) {
-      setError("This employee already has a salary record for that effective date.");
-      return;
-    }
-
-    onSave({ amount, currency, effectiveOn });
   }
 
   return (
@@ -187,7 +183,7 @@ function SalaryChangeForm({ employee, current, onSave, onCancel }) {
           <div className="form-field">
             <label htmlFor="salary-currency">Currency</label>
             <select id="salary-currency" name="currency" defaultValue={current?.currency ?? "USD"}>
-              {Object.keys(currencyDigits).map((currency) => <option key={currency}>{currency}</option>)}
+              {Object.keys(employee.currencies).map((currency) => <option key={currency}>{currency}</option>)}
             </select>
           </div>
           <div className="form-field">
@@ -198,8 +194,10 @@ function SalaryChangeForm({ employee, current, onSave, onCancel }) {
         </div>
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="button-group form-actions">
-          <button className="button button--secondary" type="button" onClick={onCancel}>Cancel</button>
-          <button className="button button--primary" type="submit">Save salary change</button>
+          <button className="button button--secondary" type="button" onClick={onCancel} disabled={saving}>Cancel</button>
+          <button className="button button--primary" type="submit" disabled={saving}>
+            {saving ? "Saving…" : "Save salary change"}
+          </button>
         </div>
       </form>
     </section>
@@ -218,10 +216,11 @@ function EmployeeDetail({ employee, onBack, onSave }) {
     recordButton.current?.focus();
   }
 
-  function recordSalary(salary) {
-    onSave(salary);
+  async function recordSalary(input) {
+    const updated = await onSave(employee.number, input);
+    const salary = updated.timeline.find(({ effectiveOn }) => effectiveOn === input.effective_on);
     closeForm();
-    setNotice(salary.effectiveOn > employee.asOf
+    setNotice(salary.status === "Scheduled"
       ? `Salary change scheduled for ${formatDate(salary.effectiveOn)}.`
       : `Salary change added for ${formatDate(salary.effectiveOn)}.`);
   }
@@ -234,7 +233,7 @@ function EmployeeDetail({ employee, onBack, onSave }) {
           <FocusHeading>{employee.name}</FocusHeading>
           <p>{employee.number} · {employee.role}</p>
         </div>
-        {onSave && employee.canRecordSalary && (
+        {employee.canRecordSalary && (
           <button className="button button--primary" ref={recordButton} onClick={() => {
             setNotice("");
             setShowForm(true);
@@ -379,6 +378,17 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionExpired }) {
     setAttempt((previous) => previous + 1);
   }
 
+  async function saveSalary(number, input) {
+    try {
+      const updated = await api(`/api/employees/${encodeURIComponent(number)}/salary_records`, { method: "POST", body: input });
+      setEmployee((current) => current?.number === number ? updated : current);
+      return updated;
+    } catch (failure) {
+      if (failure.status === 401) onSessionExpired();
+      throw failure;
+    }
+  }
+
   const asOf = employee?.asOf ?? directory?.asOf;
 
   return (
@@ -399,7 +409,8 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionExpired }) {
         {asOf && <p className="workspace-date">Compensation as of {formatDate(asOf)}</p>}
         {selected ? (
           employee ? (
-            <EmployeeDetail key={employee.number} employee={employee} onBack={() => selectEmployee(null)} />
+            <EmployeeDetail key={employee.number} employee={employee}
+              onBack={() => selectEmployee(null)} onSave={saveSalary} />
           ) : (
             <>
               <button className="back-link" onClick={() => selectEmployee(null)}>← Back to employees</button>
