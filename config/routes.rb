@@ -5,6 +5,7 @@ Rails.application.routes.draw do
     resource :session, only: %i[show create destroy]
     resource :compensation, only: :show
     resources :access_accounts, only: %i[index update]
+    resources :job_roles, only: %i[index create update]
     resources :employees, only: %i[index show create update], param: :number, format: false,
       constraints: { number: /[^\/]+/ } do
       patch :departure, on: :member

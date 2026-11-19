@@ -472,6 +472,58 @@ class HrWorkflowTest < ActionDispatch::IntegrationTest
     refute response.headers["Content-Disposition"]
   end
 
+  test "job role creation requires HR and rejects blank or duplicate names" do
+    assert_no_difference "JobRole.count" do
+      post api_job_roles_path, params: { name: "Platform Engineer" }, as: :json
+      assert_response :unauthorized
+    end
+
+    sign_in
+    assert_difference "JobRole.count", 1 do
+      post api_job_roles_path, params: { name: "  Platform Engineer  " }, as: :json
+      assert_response :created
+    end
+    assert_equal "Platform Engineer", response.parsed_body.fetch("name")
+
+    assert_no_difference "JobRole.count" do
+      ["platform engineer", "   "].each do |name|
+        post api_job_roles_path, params: { name: name }, as: :json
+        assert_response :unprocessable_entity
+      end
+    end
+  end
+
+  test "renaming a job role preserves employee assignments and updates reports and filters" do
+    employee = create_employee("EMP-001", "Asha Shah")
+    record_salary(employee, amount: 100_000_000, on: employee.joined_on)
+    sign_in
+    original_id = @role.id
+    original_name = @role.name
+    new_name = "Platform Engineer"
+
+    patch api_job_role_path(original_id), params: { name: new_name }, as: :json
+    assert_response :success
+    assert_equal({ "id" => original_id, "name" => new_name }, response.parsed_body)
+    assert_equal original_id, employee.reload.job_role_id
+
+    get api_job_roles_path, as: :json
+    assert_response :success
+    assert_includes response.parsed_body.fetch("roles"), { "id" => original_id, "name" => new_name }
+
+    get api_employee_path(employee.employee_number), as: :json
+    assert_equal new_name, response.parsed_body.fetch("role")
+
+    get api_employees_path, params: { role: new_name }, as: :json
+    assert_includes response.parsed_body.fetch("employees").pluck("number"), employee.employee_number
+    assert_includes response.parsed_body.dig("filters", "roles"), new_name
+    refute_includes response.parsed_body.dig("filters", "roles"), original_name
+
+    get api_compensation_path, params: { role: new_name }, as: :json
+    assert_response :success
+    assert_equal 1, response.parsed_body.fetch("total")
+    assert_equal "100000000", response.parsed_body.dig("groups", 0, "medianMinor")
+  end
+
   private
 
   def downloaded_salary_rows

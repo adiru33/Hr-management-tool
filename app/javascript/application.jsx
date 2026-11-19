@@ -3,11 +3,14 @@ import { createRoot } from "react-dom/client";
 import { EmployeeWorkspace } from "./employee-workspace.jsx";
 import { CompensationWorkspace } from "./compensation-workspace.jsx";
 import { AccessWorkspace } from "./access-workspace.jsx";
+import { JobRolesWorkspace } from "./job-roles-workspace.jsx";
 import { api } from "./api.js";
+
+const hrViews = { employees: EmployeeWorkspace, compensation: CompensationWorkspace, jobRoles: JobRolesWorkspace };
 
 function HrWorkspace(props) {
   const [section, setSection] = useState("employees");
-  const View = section === "compensation" ? CompensationWorkspace : EmployeeWorkspace;
+  const View = hrViews[section];
   return <View {...props} navigation={{ section, onChange: setSection }} />;
 }
 

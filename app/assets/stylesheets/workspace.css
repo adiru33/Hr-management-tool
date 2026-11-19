@@ -521,3 +521,8 @@
   flex-wrap: wrap;
   gap: 0.75rem;
 }
+
+.job-role-name {
+  max-width: 32rem;
+  margin-top: 1rem;
+}

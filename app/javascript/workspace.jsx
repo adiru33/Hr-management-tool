@@ -49,7 +49,7 @@ export function Workspace({ account, onSignOut, navigation, children }) {
       </header>
       {navigation && <nav className="workspace-nav" aria-label="HR workspace">
         <div className="workspace-nav__inner">
-          {[["employees", "Employees"], ["compensation", "Compensation"]].map(([section, label]) => (
+          {[["employees", "Employees"], ["compensation", "Compensation"], ["jobRoles", "Job roles"]].map(([section, label]) => (
             <button key={section} className="workspace-nav__item"
               aria-current={navigation.section === section ? "page" : undefined}
               onClick={() => navigation.onChange(section)}>{label}</button>

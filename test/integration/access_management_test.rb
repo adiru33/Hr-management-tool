@@ -34,6 +34,15 @@ class AccessManagementTest < ActionDispatch::IntegrationTest
     assert_response :forbidden
     get salary_history_api_employee_path(@manager.employee.employee_number)
     assert_response :forbidden
+    get api_job_roles_path, as: :json
+    assert_response :forbidden
+    assert_no_difference "JobRole.count" do
+      post api_job_roles_path, params: { name: "Unauthorized title" }, as: :json
+      assert_response :forbidden
+    end
+    patch api_job_role_path(@job_role), params: { name: "Unauthorized rename" }, as: :json
+    assert_response :forbidden
+    assert_equal "People Operations", @job_role.reload.name
     get api_employee_path(@manager.employee.employee_number), as: :json
     assert_response :forbidden
     post api_employee_salary_records_path(@manager.employee.employee_number), as: :json

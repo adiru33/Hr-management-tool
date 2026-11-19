@@ -23,6 +23,8 @@ Open **Compensation** and select a country, department, or job role. The report 
 
 From an employee's profile, select **Download CSV** in **Salary history**. The file includes profile details and one row per salary entry, newest first. It includes effective dates, status, salary and currency, the prior salary and currency, and change amounts and percentages where applicable.
 
+Open **Job roles** to create a title or rename an existing one. Only HR managers can manage job titles. Renaming preserves employee assignments, and the new title appears in employee forms, profile details, and report filters.
+
 ### Import new employees from CSV
 
 Choose **Employees → Import CSV**, then download the [sample CSV](public/templates/employee-import.csv). Keep the header names, save as UTF-8, and use existing department and job role names. Use `YYYY-MM-DD` for the joining date and enter the full annual salary in the chosen currency, without grouping separators or currency symbols. The upload supports up to 10,000 employees and 5 MB per file.
