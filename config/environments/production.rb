@@ -27,6 +27,30 @@ Rails.application.configure do
   # Force all access to the app over SSL, use Strict-Transport-Security, and use secure cookies.
   config.force_ssl = true
 
+  if ENV["ACME_PASSWORD_RECOVERY_ENABLED"] == "1"
+    origin = URI.parse(ENV.fetch("ACME_PUBLIC_URL"))
+    unless origin.is_a?(URI::HTTPS) && origin.host.present? && origin.userinfo.nil? &&
+        ["", "/"].include?(origin.path) && origin.query.nil? && origin.fragment.nil?
+      raise "ACME_PUBLIC_URL must be an HTTPS origin"
+    end
+
+    config.x.password_recovery.enabled = true
+    config.action_mailer.default_url_options = { host: origin.host, protocol: "https", port: origin.port }
+    config.action_mailer.default_options = { from: ENV.fetch("ACME_SMTP_FROM") }
+    config.action_mailer.delivery_method = :smtp
+    config.action_mailer.smtp_settings = {
+      address: ENV.fetch("ACME_SMTP_HOST"),
+      port: Integer(ENV.fetch("ACME_SMTP_PORT", "587"), 10),
+      user_name: ENV.fetch("ACME_SMTP_USERNAME"),
+      password: ENV.fetch("ACME_SMTP_PASSWORD"),
+      authentication: :plain,
+      enable_starttls: :always,
+      openssl_verify_mode: "peer",
+      open_timeout: 10,
+      read_timeout: 10
+    }
+  end
+
   # Skip http-to-https redirect for the default health check endpoint.
   # config.ssl_options = { redirect: { exclude: ->(request) { request.path == "/up" } } }
 

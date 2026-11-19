@@ -5,6 +5,7 @@ import { CompensationWorkspace } from "./compensation-workspace.jsx";
 import { AccessWorkspace } from "./access-workspace.jsx";
 import { JobRolesWorkspace } from "./job-roles-workspace.jsx";
 import { api } from "./api.js";
+import { PasswordRecoveryForm } from "./password-recovery.jsx";
 
 const hrViews = { employees: EmployeeWorkspace, compensation: CompensationWorkspace, jobRoles: JobRolesWorkspace };
 
@@ -16,7 +17,30 @@ function HrWorkspace(props) {
 
 const workspaces = new Map([["hr_manager", HrWorkspace], ["access_admin", AccessWorkspace]]);
 
-function SignIn({ onSignIn }) {
+function SignInScreen({ title, intro, children }) {
+  return (
+    <main className="sign-in">
+      <header className="sign-in__brand">
+        <div className="sign-in__brand-name">ACME</div>
+        <div className="sign-in__product">
+          <p>People Operations</p>
+          <h1>Salary Management</h1>
+        </div>
+      </header>
+
+      <section className="sign-in__panel" aria-labelledby="sign-in-heading">
+        <div className="sign-in__content">
+          <h2 id="sign-in-heading">{title}</h2>
+          <p className="sign-in__intro">{intro}</p>
+
+          {children}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function SignIn({ onSignIn, onForgotPassword }) {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -38,56 +62,42 @@ function SignIn({ onSignIn }) {
     }
   }
 
-  return (
-    <main className="sign-in">
-      <header className="sign-in__brand">
-        <div className="sign-in__brand-name">ACME</div>
-        <div className="sign-in__product">
-          <p>People Operations</p>
-          <h1>Salary Management</h1>
-        </div>
-      </header>
+  return <SignInScreen title="Sign in" intro="Use your ACME account.">
+  <form className="sign-in__form" onSubmit={signIn} onChange={() => setError("")}>
+    <div className="form-field">
+      <label htmlFor="email">Work email</label>
+      <input id="email" name="email" type="email" autoComplete="username" autoCapitalize="none"
+        spellCheck={false} required />
+    </div>
 
-      <section className="sign-in__panel" aria-labelledby="sign-in-heading">
-        <div className="sign-in__content">
-          <h2 id="sign-in-heading">Sign in</h2>
-          <p className="sign-in__intro">Use your ACME account.</p>
+    <div className="form-field">
+      <label htmlFor="password">Password</label>
+      <div className="password-field">
+        <input id="password" name="password" type={passwordVisible ? "text" : "password"}
+          autoComplete="current-password" autoCapitalize="none" spellCheck={false} required />
+        <button className="password-field__toggle" type="button"
+          onClick={() => setPasswordVisible(!passwordVisible)}>
+          {passwordVisible ? "Hide password" : "Show password"}
+        </button>
+      </div>
+    </div>
 
-          <form className="sign-in__form" onSubmit={signIn} onChange={() => setError("")}>
-            <div className="form-field">
-              <label htmlFor="email">Work email</label>
-              <input id="email" name="email" type="email" autoComplete="username" autoCapitalize="none"
-                spellCheck={false} required />
-            </div>
-
-            <div className="form-field">
-              <label htmlFor="password">Password</label>
-              <div className="password-field">
-                <input id="password" name="password" type={passwordVisible ? "text" : "password"}
-                  autoComplete="current-password" autoCapitalize="none" spellCheck={false} required />
-                <button className="password-field__toggle" type="button"
-                  onClick={() => setPasswordVisible(!passwordVisible)}>
-                  {passwordVisible ? "Hide password" : "Show password"}
-                </button>
-              </div>
-            </div>
-
-            {error && <p className="form-error" role="alert">{error}</p>}
-            <button className="sign-in__submit" type="submit" disabled={pending}>
-              {pending ? "Signing in…" : "Sign in"}
-            </button>
-          </form>
-
-        </div>
-      </section>
-    </main>
-  );
+    {error && <p className="form-error" role="alert">{error}</p>}
+    <button className="sign-in__submit" type="submit" disabled={pending}>
+      {pending ? "Signing in…" : "Sign in"}
+    </button>
+  </form>
+    {onForgotPassword && <button className="sign-in__help-action" type="button"
+      onClick={onForgotPassword}>Forgot password?</button>}
+  </SignInScreen>;
 }
 
 function App() {
   const [account, setAccount] = useState(undefined);
   const [connectionError, setConnectionError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const [recoveryAvailable, setRecoveryAvailable] = useState(false);
+  const [requestingReset, setRequestingReset] = useState(false);
 
   const refreshSession = useCallback(() => {
     setConnectionError("");
@@ -111,7 +121,12 @@ function App() {
   useEffect(() => {
     const controller = new AbortController();
     api("/api/session", { signal: controller.signal })
-      .then(({ account }) => { if (!controller.signal.aborted) setAccount(account); })
+      .then(({ account, passwordRecoveryAvailable }) => {
+        if (!controller.signal.aborted) {
+          setAccount(account);
+          setRecoveryAvailable(passwordRecoveryAvailable);
+        }
+      })
       .catch(() => {
         if (!controller.signal.aborted) setConnectionError("Unable to reach the server.");
       });
@@ -132,7 +147,22 @@ function App() {
     </main>;
   }
 
-  if (!account) return <SignIn onSignIn={setAccount} />;
+  if (window.location.pathname === "/password/reset") {
+    const token = new URLSearchParams(window.location.search).get("token");
+    return <SignInScreen title="Reset password" intro="Choose a new password for your ACME account.">
+      {recoveryAvailable
+        ? <PasswordRecoveryForm token={token} />
+        : <><p className="form-error" role="alert">Email password recovery is unavailable.</p>
+          <a className="sign-in__help-action" href="/">Back to sign in</a></>}
+    </SignInScreen>;
+  }
+
+  if (!account) {
+    if (requestingReset) return <SignInScreen title="Forgot password?" intro="Request a reset link for your ACME account.">
+      <PasswordRecoveryForm onBack={() => setRequestingReset(false)} />
+    </SignInScreen>;
+    return <SignIn onSignIn={setAccount} onForgotPassword={recoveryAvailable ? () => setRequestingReset(true) : undefined} />;
+  }
 
   const Workspace = workspaces.get(accountRole);
   if (!Workspace) {

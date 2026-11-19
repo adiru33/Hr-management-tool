@@ -1,8 +1,11 @@
 Rails.application.routes.draw do
   root "home#show"
+  devise_for :hr_accounts, skip: :all
+  get "password/reset", to: "home#show", as: :password_reset
 
   namespace :api, defaults: { format: :json } do
     resource :session, only: %i[show create destroy]
+    resource :password_reset, only: %i[create update]
     resource :compensation, only: :show
     resources :access_accounts, only: %i[index update]
     resources :job_roles, only: %i[index create update]

@@ -17,9 +17,12 @@ module Api
     def current_account
       return @current_account if defined?(@current_account)
 
-      account = HrAccount.includes(:employee).find_by(id: session[:hr_account_id]) if session[:hr_account_id]
+      account = current_hr_account
       valid = account&.sign_in_allowed_on?(business_date) && account.access_version == session[:access_version]
-      reset_session if !valid && session[:hr_account_id]
+      if !valid && (account || session[:access_version] || session[:hr_account_id])
+        sign_out(:hr_account)
+        reset_session
+      end
       @current_account = valid ? account : nil
     end
 

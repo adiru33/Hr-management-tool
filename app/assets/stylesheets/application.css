@@ -192,3 +192,18 @@ button {
     padding-block: 1.75rem;
   }
 }
+
+.sign-in__help-action {
+  display: inline-block;
+  margin-top: 1.15rem;
+  padding: 0;
+  border: 0;
+  color: #14563f;
+  background: transparent;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.sign-in__help-action:hover {
+  text-decoration: underline;
+}

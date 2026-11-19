@@ -53,6 +53,12 @@ bin/rails 'access:disable_admin[ADMIN_EMPLOYEE_NUMBER]'
 
 The enrollment command prompts for the password. Pre-enroll a primary and backup Access Admin so a trusted operator can recover access if a primary admin leaves.
 
+## Password recovery
+
+Devise verifies passwords and issues reset links. For an HTTPS deployment with verified work email accounts, enable the **Forgot password?** button by setting `ACME_PASSWORD_RECOVERY_ENABLED=1` and `ACME_PUBLIC_URL` to the app's public HTTPS origin. Configure `ACME_SMTP_HOST`, `ACME_SMTP_PORT` (default 587), `ACME_SMTP_USERNAME`, `ACME_SMTP_PASSWORD`, and `ACME_SMTP_FROM` in the hosting environment. The sender must be authorized by the SMTP provider. Mail delivery runs in an in-process job, which may need to be requested again after a restart.
+
+HR and Access Admin accounts use the same recovery flow. Links expire after 30 minutes and can be used once. Resetting a password revokes existing sessions and preserves the account's access status. The seeded demo uses sample email addresses, so a trusted operator can use `bin/rails 'access:reset_password[EMPLOYEE_NUMBER]'` instead. The command prompts for the new password privately.
+
 ## Design
 
 - [Product requirements](docs/requirements.md)
