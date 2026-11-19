@@ -126,7 +126,8 @@ class CompensationTest < ActiveSupport::TestCase
 
   def create_manager(number, email)
     employee = Employee.create!(employee_attributes(number))
-    HrAccount.create!(employee: employee, email: email, password: "test-password-123")
+    HrAccount.create!(employee: employee, email: email, password: "test-password-123",
+      role: :hr_manager, access_enabled: true)
   end
 
   def hire(amount_minor: 100_000_000)

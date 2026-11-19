@@ -39,6 +39,8 @@ module DemoSeed
         HrAccount.find_or_create_by!(employee: employee) do |account|
           account.email = "hr#{index + 1}@acme.example"
           account.password = password
+          account.role = :hr_manager
+          account.access_enabled = true
         end
       end
 
@@ -59,6 +61,25 @@ module DemoSeed
           salary_rows(employee, currency: currency, starting_amount: starting_amount, author_id: managers.first.id)
         end
         add_salary_records(salaries)
+      end
+
+      seed_access_accounts
+    end
+  end
+
+  def seed_access_accounts
+    accounts = [
+      ["DEMO-00019", "access-admin@acme.example", :access_admin, "ACME_DEMO_ADMIN_ONE_PASSWORD", "local-acme-access-one"],
+      ["DEMO-00021", "backup-admin@acme.example", :access_admin, "ACME_DEMO_ADMIN_TWO_PASSWORD", "local-acme-access-two"],
+      ["DEMO-00022", "replacement.hr@acme.example", :employee, "ACME_DEMO_REPLACEMENT_PASSWORD", "local-acme-replacement"]
+    ]
+    accounts.each do |number, email, role, variable, default|
+      employee = Employee.find_by!(employee_number: number)
+      HrAccount.find_or_create_by!(employee: employee) do |account|
+        account.email = email
+        account.role = role
+        account.access_enabled = role == :access_admin
+        account.password = Rails.env.development? ? ENV.fetch(variable, default) : ENV.fetch(variable)
       end
     end
   end

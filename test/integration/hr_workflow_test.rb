@@ -5,7 +5,8 @@ class HrWorkflowTest < ActionDispatch::IntegrationTest
     @department = Department.create!(name: "Engineering")
     @role = JobRole.create!(name: "Software Engineer")
     employee = create_employee("HR-01", "Amara Shah")
-    @manager = HrAccount.create!(employee: employee, email: "amara@example.test", password: "sample-password")
+    @manager = HrAccount.create!(employee: employee, email: "amara@example.test", password: "sample-password",
+      role: :hr_manager, access_enabled: true)
   end
 
   test "sign-in establishes a session and sign-out clears it" do

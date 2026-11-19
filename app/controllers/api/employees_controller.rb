@@ -43,7 +43,7 @@ module Api
         record = find_employee
         record.salary_records.create!(
           amount_minor: amount_minor, currency_code: currency, effective_on: effective_on,
-          recorded_by_hr_account: current_hr_account
+          recorded_by_hr_account: current_account
         )
         record
       end
@@ -148,7 +148,7 @@ module Api
       summary(employee).merge(
         joinedOn: employee.joined_on, lastWorkingOn: employee.last_working_on,
         current: salary_data(current), lastEffective: salary_data(last_effective), timeline: timeline.reverse,
-        canRecordSalary: active && employee.id != current_hr_account.employee_id,
+        canRecordSalary: active && employee.id != current_account.employee_id,
         asOf: business_date,
         currencies: SalaryRecord::CURRENCY_PRECISIONS
       )

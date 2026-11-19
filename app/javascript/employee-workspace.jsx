@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "./api.js";
+import { Workspace } from "./workspace.jsx";
 
 const emptyFilters = { search: "", country: "", department: "", role: "", status: "" };
 const countryNames = { DE: "Germany", GB: "United Kingdom", IN: "India", JP: "Japan", US: "United States" };
@@ -301,8 +302,6 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionExpired }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
   const [attempt, setAttempt] = useState(0);
-  const [signingOut, setSigningOut] = useState(false);
-  const [signOutError, setSignOutError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -331,18 +330,6 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionExpired }) {
       controller.abort();
     };
   }, [filters, page, selected, attempt, onSessionExpired]);
-
-  async function signOut() {
-    setSigningOut(true);
-    setSignOutError("");
-    try {
-      await onSignOut();
-    } catch {
-      setSignOutError("Unable to sign out. Please try again.");
-    } finally {
-      setSigningOut(false);
-    }
-  }
 
   function startLoading() {
     setError("");
@@ -392,20 +379,7 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionExpired }) {
   const asOf = employee?.asOf ?? directory?.asOf;
 
   return (
-    <div className="workspace">
-      <header className="workspace-header">
-        <div className="workspace-header__inner">
-          <div className="workspace-brand"><strong>ACME</strong><span>Salary Management</span></div>
-          <div className="workspace-account">
-            <span>{account.name}</span>
-            <button className="button button--secondary" onClick={signOut} disabled={signingOut}>
-              {signingOut ? "Signing out…" : "Sign out"}
-            </button>
-          </div>
-        </div>
-      </header>
-      <main className="workspace-main">
-        {signOutError && <p className="form-error" role="alert">{signOutError}</p>}
+    <Workspace account={account} onSignOut={onSignOut}>
         {asOf && <p className="workspace-date">Compensation as of {formatDate(asOf)}</p>}
         {selected ? (
           employee ? (
@@ -424,7 +398,6 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionExpired }) {
           <EmployeeDirectory data={directory} busy={busy} error={error} filters={filters} onFilter={changeFilter}
             onClear={clearFilters} onPage={changePage} onSelect={selectEmployee} onRetry={retry} />
         )}
-      </main>
-    </div>
+    </Workspace>
   );
 }

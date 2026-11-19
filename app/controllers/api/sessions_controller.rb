@@ -5,7 +5,7 @@ module Api
     }
 
     def show
-      render_session(current_hr_account)
+      render_session(current_account)
     end
 
     def create
@@ -15,13 +15,14 @@ module Api
       account = HrAccount.authenticate_by(email: email, password: password) if
         email.is_a?(String) && email.bytesize <= 254 && password.is_a?(String) && password.bytesize <= 72
 
-      unless account&.active_on?(business_date)
-        return render json: { error: "The email or password is incorrect, or your HR access is inactive." },
+      unless account&.sign_in_allowed_on?(business_date)
+        return render json: { error: "The email or password is incorrect, or your account access is inactive." },
           status: :unauthorized
       end
 
       reset_session
       session[:hr_account_id] = account.id
+      session[:access_version] = account.access_version
       render_session(account)
     end
 
@@ -34,7 +35,7 @@ module Api
 
     def render_session(account)
       render json: {
-        account: account && { name: account.employee.full_name },
+        account: account && { name: account.employee.full_name, role: account.role },
         csrfToken: form_authenticity_token
       }
     end

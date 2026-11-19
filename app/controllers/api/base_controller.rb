@@ -14,19 +14,29 @@ module Api
       @business_date ||= Date.current
     end
 
-    def current_hr_account
-      return @current_hr_account if defined?(@current_hr_account)
+    def current_account
+      return @current_account if defined?(@current_account)
 
       account = HrAccount.includes(:employee).find_by(id: session[:hr_account_id]) if session[:hr_account_id]
-      @current_hr_account = account if account&.active_on?(business_date)
-      reset_session if !@current_hr_account && session[:hr_account_id]
-      @current_hr_account
+      valid = account&.sign_in_allowed_on?(business_date) && account.access_version == session[:access_version]
+      reset_session if !valid && session[:hr_account_id]
+      @current_account = valid ? account : nil
     end
 
     def require_hr_account
-      return if current_hr_account
+      require_role("hr_manager", "HR Manager")
+    end
 
-      render json: { error: "Sign in to continue.", csrfToken: form_authenticity_token }, status: :unauthorized
+    def require_access_admin
+      require_role("access_admin", "Access Admin")
+    end
+
+    def require_role(role, label)
+      if current_account.nil?
+        render json: { error: "Sign in to continue.", csrfToken: form_authenticity_token }, status: :unauthorized
+      elsif current_account.role != role
+        render json: { error: "#{label} access is required." }, status: :forbidden
+      end
     end
 
     def invalid_csrf_token

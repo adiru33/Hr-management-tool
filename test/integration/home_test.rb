@@ -10,7 +10,7 @@ class HomeTest < ActionDispatch::IntegrationTest
     assert_select "script[src*='application-']" do |scripts|
       get scripts.first["src"]
       assert_response :success
-      assert_includes response.body, "Use your ACME HR account."
+      assert_includes response.body, "Use your ACME account."
     end
   end
 end

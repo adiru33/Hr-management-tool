@@ -55,8 +55,11 @@ class SalaryRecord < ApplicationRecord
 
   def validate_author
     return unless employee && recorded_by_hr_account
-    return unless recorded_by_hr_account.employee_id == employee.id
 
-    errors.add(:base, "HR managers cannot change their own salary")
+    if !recorded_by_hr_account.role_hr_manager?
+      errors.add(:base, "Only an HR Manager can record salary changes")
+    elsif recorded_by_hr_account.employee_id == employee.id
+      errors.add(:base, "HR managers cannot change their own salary")
+    end
   end
 end

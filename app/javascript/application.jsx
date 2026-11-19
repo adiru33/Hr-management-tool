@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { EmployeeWorkspace } from "./employee-workspace.jsx";
+import { AccessWorkspace } from "./access-workspace.jsx";
 import { api } from "./api.js";
 
 function SignIn({ onSignIn }) {
@@ -38,7 +39,7 @@ function SignIn({ onSignIn }) {
       <section className="sign-in__panel" aria-labelledby="sign-in-heading">
         <div className="sign-in__content">
           <h2 id="sign-in-heading">Sign in</h2>
-          <p className="sign-in__intro">Use your ACME HR account.</p>
+          <p className="sign-in__intro">Use your ACME account.</p>
 
           <form className="sign-in__form" onSubmit={signIn} onChange={() => setError("")}>
             <div className="form-field">
@@ -104,9 +105,10 @@ function App() {
     </main>;
   }
 
-  return account
-    ? <EmployeeWorkspace account={account} onSignOut={signOut} onSessionExpired={endSession} />
-    : <SignIn onSignIn={setAccount} />;
+  if (!account) return <SignIn onSignIn={setAccount} />;
+
+  const Workspace = account.role === "access_admin" ? AccessWorkspace : EmployeeWorkspace;
+  return <Workspace account={account} onSignOut={signOut} onSessionExpired={endSession} />;
 }
 
 createRoot(document.getElementById("app")).render(<App />);

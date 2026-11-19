@@ -10,7 +10,17 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_19_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_19_010100) do
+  create_table "account_access_events", force: :cascade do |t|
+    t.integer "actor_id", null: false
+    t.integer "target_id", null: false
+    t.string "action", null: false
+    t.date "last_working_on"
+    t.datetime "created_at", null: false
+    t.index ["actor_id"], name: "index_account_access_events_on_actor_id"
+    t.index ["target_id"], name: "index_account_access_events_on_target_id"
+  end
+
   create_table "departments", force: :cascade do |t|
     t.string "name", null: false, collation: "NOCASE"
     t.index ["name"], name: "index_departments_on_name", unique: true
@@ -39,8 +49,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_000000) do
     t.string "password_digest", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "role", default: "employee", null: false
+    t.boolean "access_enabled", default: false, null: false
+    t.integer "access_version", default: 0, null: false
     t.index ["email"], name: "index_hr_accounts_on_email", unique: true
     t.index ["employee_id"], name: "index_hr_accounts_on_employee_id", unique: true
+    t.index ["role"], name: "index_hr_accounts_on_role"
+    t.check_constraint "role <> 'employee' OR access_enabled = 0", name: "hr_accounts_employee_access_disabled"
+    t.check_constraint "role IN ('employee', 'hr_manager', 'access_admin')", name: "hr_accounts_valid_role"
   end
 
   create_table "job_roles", force: :cascade do |t|
@@ -60,6 +76,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_000000) do
     t.check_constraint "typeof(amount_minor) = 'integer' AND amount_minor > 0", name: "salary_records_positive_integer_amount"
   end
 
+  add_foreign_key "account_access_events", "hr_accounts", column: "actor_id"
+  add_foreign_key "account_access_events", "hr_accounts", column: "target_id"
   add_foreign_key "employees", "departments"
   add_foreign_key "employees", "job_roles"
   add_foreign_key "hr_accounts", "employees"
