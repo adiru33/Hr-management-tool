@@ -5,11 +5,12 @@ class HomeTest < ActionDispatch::IntegrationTest
     get root_path
 
     assert_response :success
+    assert_select "title", "ACME Salary Management"
     assert_select "div#app"
     assert_select "script[src*='application-']" do |scripts|
       get scripts.first["src"]
       assert_response :success
-      assert_includes response.body, "ACME Salary Management"
+      assert_includes response.body, "Use your ACME HR account."
     end
   end
 end
