@@ -174,9 +174,11 @@ function SalaryChangeForm({ employee, current, onSave, onCancel }) {
   );
 }
 
-function EmployeeDetail({ employee, onBack, onSave, onEdit, onDeparture, profileNotice }) {
+function EmployeeDetail({ employee, onBack, onSave, onEdit, onDeparture, onExport, profileNotice }) {
   const [form, setForm] = useState(null);
   const [notice, setNotice] = useState(profileNotice);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const recordButton = useRef(null);
   const departureButton = useRef(null);
   const { status, current, lastEffective, timeline } = employee;
@@ -200,6 +202,26 @@ function EmployeeDetail({ employee, onBack, onSave, onEdit, onDeparture, profile
     await onDeparture(employee.number, input);
     closeForm();
     setNotice(`Last working day recorded as ${formatDate(input.last_working_on)}.`);
+  }
+
+  async function downloadSalaryHistory() {
+    setExporting(true);
+    setExportError("");
+    try {
+      const csv = await onExport(employee.number);
+      const url = URL.createObjectURL(csv);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `employee-${employee.number}-salary-history.csv`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (failure) {
+      setExportError(failure.status ? failure.message : "Unable to download the salary history. Please try again.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
@@ -250,10 +272,15 @@ function EmployeeDetail({ employee, onBack, onSave, onEdit, onDeparture, profile
       {form === "departure" && <DepartureForm employee={employee} onSave={recordDeparture} onCancel={closeForm} />}
       {notice && <p className="workspace-notice" role="status">{notice}</p>}
       <section className="workspace-card" aria-labelledby="salary-history-heading">
-        <div className="section-heading">
-          <h2 id="salary-history-heading">Salary history</h2>
-          <p>Annual base salary by effective date.</p>
+        <div className="section-heading salary-history-heading">
+          <div>
+            <h2 id="salary-history-heading">Salary history</h2>
+            <p>Annual base salary by effective date.</p>
+          </div>
+          <button className="button button--secondary" type="button" disabled={exporting}
+            onClick={downloadSalaryHistory}>{exporting ? "Preparing CSV…" : "Download CSV"}</button>
         </div>
+        {exportError && <p className="form-error section-heading" role="alert">{exportError}</p>}
         <div className="table-scroll">
           <table aria-label="Salary history">
             <thead><tr><th scope="col">Effective date</th><th scope="col">Annual base salary</th><th scope="col">Change</th><th scope="col">Status</th></tr></thead>
@@ -379,6 +406,15 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionError, navigati
     setProfileMode(null);
   }
 
+  async function exportEmployee(number) {
+    try {
+      return await api(`/api/employees/${encodeURIComponent(number)}/salary_history`, { responseType: "csv" });
+    } catch (failure) {
+      onSessionError(failure);
+      throw failure;
+    }
+  }
+
   const asOf = employee?.asOf ?? directory?.asOf;
 
   return (
@@ -395,7 +431,8 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionError, navigati
             <EmployeeDetail key={employee.number} employee={employee}
               profileNotice={profileNotice} onBack={() => selectEmployee(null)} onEdit={() => setProfileMode("edit")}
               onSave={(number, input) => updateEmployee(number, "/salary_records", "POST", input)}
-              onDeparture={(number, input) => updateEmployee(number, "/departure", "PATCH", input)} />
+              onDeparture={(number, input) => updateEmployee(number, "/departure", "PATCH", input)}
+              onExport={exportEmployee} />
           ) : (
             <>
               <button className="back-link" onClick={() => selectEmployee(null)}>← Back to employees</button>

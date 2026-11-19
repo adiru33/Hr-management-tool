@@ -32,6 +32,8 @@ class AccessManagementTest < ActionDispatch::IntegrationTest
     assert_equal ["wrong_role", "access_admin"], response.parsed_body.values_at("code", "accountRole")
     get api_compensation_path, as: :json
     assert_response :forbidden
+    get salary_history_api_employee_path(@manager.employee.employee_number)
+    assert_response :forbidden
     get api_employee_path(@manager.employee.employee_number), as: :json
     assert_response :forbidden
     post api_employee_salary_records_path(@manager.employee.employee_number), as: :json

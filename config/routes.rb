@@ -8,6 +8,7 @@ Rails.application.routes.draw do
     resources :employees, only: %i[index show create update], param: :number, format: false,
       constraints: { number: /[^\/]+/ } do
       patch :departure, on: :member
+      get :salary_history, on: :member
       post :import, on: :collection
     end
     post "employees/:number/salary_records", to: "employees#create_salary", as: :employee_salary_records,

@@ -21,6 +21,8 @@ Use **Add employee** to create a profile and its starting annual salary in one t
 
 Open **Compensation** and select a country, department, or job role. The report lists headcount, mean, and median annual base salary for each currency, using each active employee's latest effective salary. Amounts are rounded to the nearest minor unit of the currency.
 
+From an employee's profile, select **Download CSV** in **Salary history**. The file includes profile details and one row per salary entry, newest first. It includes effective dates, status, salary and currency, the prior salary and currency, and change amounts and percentages where applicable.
+
 ### Import new employees from CSV
 
 Choose **Employees → Import CSV**, then download the [sample CSV](public/templates/employee-import.csv). Keep the header names, save as UTF-8, and use existing department and job role names. Use `YYYY-MM-DD` for the joining date and enter the full annual salary in the chosen currency, without grouping separators or currency symbols. The upload supports up to 10,000 employees and 5 MB per file.

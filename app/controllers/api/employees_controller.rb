@@ -31,6 +31,13 @@ module Api
       render json: details(find_employee)
     end
 
+    def salary_history
+      employee = find_employee
+      send_data EmployeeSalaryCsv.new(employee, as_of: business_date).generate,
+        filename: "employee-#{employee.employee_number}-salary-history.csv",
+        type: "text/csv; charset=utf-8", disposition: :attachment
+    end
+
     def create
       employee = EmployeeInput.new.hire!(params.permit(*EmployeeInput::HIRE_FIELDS), actor: current_account)
       render json: details(employee), status: :created
@@ -162,26 +169,17 @@ module Api
     end
 
     def details(employee)
-      salaries = employee.salary_records.order(:effective_on).to_a
-      last_effective = salaries.reverse_each.find { |salary| salary.status(on: business_date) == :effective }
-      active = employee.employed_on?(business_date)
-      current = last_effective if active
-      previous = nil
-
-      timeline = salaries.map do |salary|
-        row = salary_data(salary).merge(
-          status: timeline_status(salary, current),
-          previous: salary_data(previous),
-          change: salary_change(salary, previous)
+      timeline = EmployeeSalaryTimeline.new(employee, as_of: business_date)
+      entries = timeline.entries.map do |entry|
+        salary_data(entry.salary).merge(
+          status: entry.status, previous: salary_data(entry.previous), change: salary_change(entry)
         )
-        previous = salary
-        row
       end
 
       summary(employee).merge(
         joinedOn: employee.joined_on, lastWorkingOn: employee.last_working_on,
-        current: salary_data(current), lastEffective: salary_data(last_effective), timeline: timeline.reverse,
-        canRecordSalary: active && employee.id != current_account.employee_id,
+        current: salary_data(timeline.current), lastEffective: salary_data(timeline.last_effective), timeline: entries,
+        canRecordSalary: employee.employed_on?(business_date) && employee.id != current_account.employee_id,
         canRecordDeparture: employee.id != current_account.employee_id,
         asOf: business_date,
         currencies: SalaryRecord::CURRENCY_PRECISIONS
@@ -194,21 +192,10 @@ module Api
       { amount: salary.amount_minor.to_s, currency: salary.currency_code, effectiveOn: salary.effective_on }
     end
 
-    def timeline_status(salary, current)
-      return "Current" if salary == current
+    def salary_change(entry)
+      return unless entry.change
 
-      case salary.status(on: business_date)
-      when :scheduled then "Scheduled"
-      when :unapplied then "Unapplied"
-      else "Historical"
-      end
-    end
-
-    def salary_change(salary, previous)
-      change = salary.change_from(previous)
-      return unless change
-
-      { amount: change.fetch(:amount_minor).to_s, percentage: change.fetch(:percentage).to_f }
+      { amount: entry.change.fetch(:amount_minor).to_s, percentage: entry.percentage_hundredths.fdiv(100) }
     end
   end
 end

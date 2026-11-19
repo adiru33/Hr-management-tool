@@ -1,4 +1,5 @@
 require "test_helper"
+require "csv"
 require "tempfile"
 
 class HrWorkflowTest < ActionDispatch::IntegrationTest
@@ -397,7 +398,85 @@ class HrWorkflowTest < ActionDispatch::IntegrationTest
     assert_empty response.parsed_body.fetch("groups")
   end
 
+  test "salary history download matches the employee timeline and preserves currency precision" do
+    target = create_employee("EMP-001", 'Ásha, "AJ" Shah')
+    today = Date.current
+    record_salary(target, amount: 100_000_000, on: target.joined_on)
+    record_salary(target, amount: 110_000_000, on: today.yesterday)
+    record_salary(target, amount: 10_000_000, on: today, currency: "USD")
+    record_salary(target, amount: 11_000_500, on: today.tomorrow, currency: "USD")
+    sign_in
+
+    get api_employee_path(target.employee_number), as: :json
+    timeline = response.parsed_body.fetch("timeline")
+
+    get salary_history_api_employee_path(target.employee_number), headers: { "Accept" => "text/csv" }
+    assert_response :success
+    assert_equal "text/csv", response.media_type
+    assert_includes response.headers.fetch("Content-Disposition"), "employee-EMP-001-salary-history.csv"
+    assert_includes response.headers.fetch("Cache-Control"), "no-store"
+    assert response.body.start_with?("\uFEFF")
+    rows = downloaded_salary_rows
+    assert_equal timeline.pluck("effectiveOn"), rows["effective_on"]
+    assert_equal timeline.pluck("status"), rows["status"]
+    assert_equal timeline.pluck("currency"), rows["currency"]
+    assert_equal [target.full_name], rows["full_name"].uniq
+    assert_equal [target.joined_on.iso8601], rows["joined_on"].uniq
+    assert_equal %w[110005.00 100000.00 1100000.00 1000000.00], rows["annual_base_salary"]
+    assert_equal ["10005.00", "", "100000.00", ""], rows["change_amount"]
+    assert_equal ["10.01", "", "10.00", ""], rows["change_percent"]
+    assert_equal 10.01, timeline.dig(0, "change", "percentage")
+    assert_equal "INR", rows[1]["previous_currency"]
+    assert_equal "1100000.00", rows[1]["previous_annual_base_salary"]
+  end
+
+  test "download retains former employee history and marks later salary entries unapplied" do
+    target = create_employee("EMP-001", "Former employee", country_code: "JP")
+    record_salary(target, amount: 6_000_000, on: target.joined_on, currency: "JPY")
+    record_salary(target, amount: 6_500_000, on: Date.current.tomorrow, currency: "JPY")
+    last_day = Date.current.yesterday
+    target.update!(last_working_on: last_day)
+    sign_in
+
+    get salary_history_api_employee_path(target.employee_number)
+    assert_response :success
+    rows = downloaded_salary_rows
+    assert_equal ["Unapplied", "Historical"], rows["status"]
+    assert_equal %w[6500000 6000000], rows["annual_base_salary"]
+    assert_equal [last_day.iso8601], rows["last_working_on"].uniq
+    assert rows["change_amount"].all?(&:blank?)
+  end
+
+  test "download protects formula-like text and includes a profile without salary history" do
+    target = create_employee("EMP-001", "@Example Name")
+    sign_in
+    get salary_history_api_employee_path(target.employee_number)
+    assert_response :success
+
+    rows = downloaded_salary_rows
+    assert_equal 1, rows.length
+    assert_equal "Text: @Example Name", rows[0]["full_name"]
+    assert rows[0]["effective_on"].blank?
+  end
+
+  test "salary history download requires an active HR account" do
+    target = create_employee("EMP-001", "Asha Shah")
+    path = salary_history_api_employee_path(target.employee_number)
+    get path
+    assert_response :unauthorized
+    sign_in
+
+    @manager.employee.update!(last_working_on: Date.current.yesterday)
+    get path
+    assert_response :unauthorized
+    refute response.headers["Content-Disposition"]
+  end
+
   private
+
+  def downloaded_salary_rows
+    CSV.parse(response.body.delete_prefix("\uFEFF"), headers: true)
+  end
 
   def hire_input
     {
