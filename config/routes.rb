@@ -3,6 +3,7 @@ Rails.application.routes.draw do
 
   namespace :api, defaults: { format: :json } do
     resource :session, only: %i[show create destroy]
+    resource :compensation, only: :show
     resources :access_accounts, only: %i[index update]
     resources :employees, only: %i[index show create update], param: :number, format: false,
       constraints: { number: /[^\/]+/ } do

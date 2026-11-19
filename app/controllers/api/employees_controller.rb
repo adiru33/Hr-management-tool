@@ -20,13 +20,10 @@ module Api
         pageSize: PAGE_SIZE,
         total: total,
         asOf: business_date,
-        filters: {
-          countries: Employee::COUNTRY_CODES,
-          departments: Department.order(:name).pluck(:name),
-          roles: JobRole.order(:name).pluck(:name),
+        filters: Employee.organization_options.merge(
           statuses: %w[Active Former Upcoming],
           currencies: SalaryRecord::CURRENCY_PRECISIONS.keys
-        }
+        )
       }
     end
 
@@ -124,7 +121,7 @@ module Api
 
     def filtered_employees
       filters = params.permit(:search, :country, :department, :role, :status)
-      employees = Employee.all
+      employees = Employee.in_organization(country: filters[:country], department: filters[:department], role: filters[:role])
       search = filters[:search].to_s.strip.first(100)
 
       if search.present?
@@ -133,12 +130,6 @@ module Api
           "full_name LIKE :pattern ESCAPE '!' OR employee_number LIKE :pattern ESCAPE '!'", pattern: pattern
         )
       end
-      employees = employees.where(country_code: filters[:country]) if filters[:country].present?
-      if filters[:department].present?
-        employees = employees.where(department: Department.where(name: filters[:department]))
-      end
-      employees = employees.where(job_role: JobRole.where(name: filters[:role])) if filters[:role].present?
-
       case filters[:status]
       when "Active" then employees.active_on(business_date)
       when "Former" then employees.where(last_working_on: ...business_date)

@@ -336,6 +336,67 @@ class HrWorkflowTest < ActionDispatch::IntegrationTest
     assert_match(/at most 10000 employees/, response.parsed_body.fetch("error"))
   end
 
+  test "compensation counts the latest salary of each active employee by currency" do
+    get api_compensation_path, as: :json
+    assert_response :unauthorized
+
+    today = Date.current
+    first = create_employee("EMP-001", "First employee")
+    record_salary(first, amount: 90_000_000, on: first.joined_on)
+    record_salary(first, amount: 100_000_000, on: today)
+    record_salary(first, amount: 300_000_000, on: today.tomorrow)
+    last_day = create_employee("EMP-002", "Works through today", last_working_on: today)
+    record_salary(last_day, amount: 110_000_000, on: last_day.joined_on)
+    third = create_employee("EMP-003", "Third employee")
+    record_salary(third, amount: 200_000_000, on: third.joined_on)
+    resigned = create_employee("EMP-004", "Former employee", last_working_on: today.yesterday)
+    record_salary(resigned, amount: 800_000_000, on: resigned.joined_on)
+    upcoming = create_employee("EMP-005", "Future employee", joined_on: today.tomorrow)
+    record_salary(upcoming, amount: 900_000_000, on: upcoming.joined_on)
+    create_employee("EMP-006", "Missing salary")
+
+    %w[EMP-007 EMP-008].each_with_index do |number, index|
+      employee = create_employee(number, "Paid in USD")
+      record_salary(employee, amount: 10_000_000 + index, on: employee.joined_on, currency: "USD")
+    end
+    sign_in
+
+    get api_compensation_path, as: :json
+    assert_response :success
+    assert_equal 5, response.parsed_body.fetch("total")
+    assert_equal today.iso8601, response.parsed_body.fetch("asOf")
+    assert_equal [
+      { "currency" => "INR", "headcount" => 3, "meanMinor" => "136666667", "medianMinor" => "110000000" },
+      { "currency" => "USD", "headcount" => 2, "meanMinor" => "10000001", "medianMinor" => "10000001" }
+    ], response.parsed_body.fetch("groups")
+  end
+
+  test "compensation applies country, department, and job role filters together" do
+    finance = Department.create!(name: "Finance")
+    analyst = JobRole.create!(name: "Analyst")
+    employees = [
+      create_employee("EMP-001", "Target"),
+      create_employee("EMP-002", "Another country", country_code: "US"),
+      create_employee("EMP-003", "Another department", department: finance),
+      create_employee("EMP-004", "Another role", job_role: analyst)
+    ]
+    employees.each_with_index do |employee, index|
+      record_salary(employee, amount: 100_000_000 + index, on: employee.joined_on)
+    end
+    sign_in
+
+    filters = { country: "IN", department: @department.name, role: @role.name }
+    get api_compensation_path, params: filters, as: :json
+    assert_response :success
+    assert_equal 1, response.parsed_body.fetch("total")
+    assert_equal "100000000", response.parsed_body.dig("groups", 0, "medianMinor")
+
+    get api_compensation_path, params: filters.merge(country: "GB"), as: :json
+    assert_response :success
+    assert_equal 0, response.parsed_body.fetch("total")
+    assert_empty response.parsed_body.fetch("groups")
+  end
+
   private
 
   def hire_input
@@ -371,9 +432,9 @@ class HrWorkflowTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
-  def record_salary(employee, amount:, on:)
+  def record_salary(employee, amount:, on:, currency: "INR")
     employee.salary_records.create!(
-      amount_minor: amount, currency_code: "INR", effective_on: on, recorded_by_hr_account: @manager
+      amount_minor: amount, currency_code: currency, effective_on: on, recorded_by_hr_account: @manager
     )
   end
 

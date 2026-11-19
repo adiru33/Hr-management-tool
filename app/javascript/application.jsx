@@ -1,10 +1,17 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { EmployeeWorkspace } from "./employee-workspace.jsx";
+import { CompensationWorkspace } from "./compensation-workspace.jsx";
 import { AccessWorkspace } from "./access-workspace.jsx";
 import { api } from "./api.js";
 
-const workspaces = new Map([["hr_manager", EmployeeWorkspace], ["access_admin", AccessWorkspace]]);
+function HrWorkspace(props) {
+  const [section, setSection] = useState("employees");
+  const View = section === "compensation" ? CompensationWorkspace : EmployeeWorkspace;
+  return <View {...props} navigation={{ section, onChange: setSection }} />;
+}
+
+const workspaces = new Map([["hr_manager", HrWorkspace], ["access_admin", AccessWorkspace]]);
 
 function SignIn({ onSignIn }) {
   const [passwordVisible, setPasswordVisible] = useState(false);

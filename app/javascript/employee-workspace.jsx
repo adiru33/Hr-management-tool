@@ -1,53 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "./api.js";
-import { Workspace } from "./workspace.jsx";
+import { Filter, FocusHeading, Workspace } from "./workspace.jsx";
+import { countryNames, formatDate, formatSalary } from "./formatting.js";
 import { DepartureForm, EmployeeForm } from "./employee-form.jsx";
 import { EmployeeImportForm } from "./employee-import-form.jsx";
 
 const emptyFilters = { search: "", country: "", department: "", role: "", status: "" };
-const countryNames = { DE: "Germany", GB: "United Kingdom", IN: "India", JP: "Japan", US: "United States" };
-const currencyDigits = { EUR: 2, GBP: 2, INR: 2, JPY: 0, USD: 2 };
-const dateFormatter = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "UTC" });
-
-function formatDate(date) {
-  return dateFormatter.format(new Date(date + "T00:00:00Z"));
-}
-
-function formatSalary(amount, currency, signed = false) {
-  const precision = currencyDigits[currency];
-  const units = BigInt(amount);
-  const digits = (units < 0n ? -units : units).toString().padStart(precision + 1, "0");
-  const fraction = precision ? digits.slice(-precision) : "";
-  const whole = precision ? digits.slice(0, -precision) : digits;
-  const value = `${units < 0n ? "-" : ""}${whole}${fraction ? "." + fraction : ""}`;
-  return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: Number(fraction) ? precision : 0,
-    signDisplay: signed ? "exceptZero" : "auto",
-  }).format(value);
-}
 
 function Status({ children }) {
   return <span className={"status-tag status-tag--" + children.toLowerCase()}>{children}</span>;
-}
-
-function FocusHeading({ children, ...props }) {
-  const heading = useRef(null);
-  useEffect(() => { heading.current.focus(); }, []);
-  return <h1 {...props} ref={heading} tabIndex={-1}>{children}</h1>;
-}
-
-function Filter({ field, label, value, options, renderValue = (option) => option, onChange }) {
-  return (
-    <div className="form-field">
-      <label htmlFor={field}>{label}</label>
-      <select id={field} value={value} onChange={(event) => onChange(field, event.target.value)}>
-        <option value="">All</option>
-        {options.map((option) => <option key={option} value={option}>{renderValue(option)}</option>)}
-      </select>
-    </div>
-  );
 }
 
 function EmployeeDirectory({ data, busy, error, filters, onFilter, onClear, onPage, onSelect, onRetry, onAdd, onImport }) {
@@ -318,7 +279,7 @@ function EmployeeDetail({ employee, onBack, onSave, onEdit, onDeparture, profile
   );
 }
 
-export function EmployeeWorkspace({ account, onSignOut, onSessionError }) {
+export function EmployeeWorkspace({ account, onSignOut, onSessionError, navigation }) {
   const [filters, setFilters] = useState(emptyFilters);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(null);
@@ -421,7 +382,7 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionError }) {
   const asOf = employee?.asOf ?? directory?.asOf;
 
   return (
-    <Workspace account={account} onSignOut={onSignOut}>
+    <Workspace account={account} onSignOut={onSignOut} navigation={navigation}>
         {asOf && <p className="workspace-date">Compensation as of {formatDate(asOf)}</p>}
         {profileMode === "import" ? (
           <EmployeeImportForm onUpload={(file) => write("/api/employees/import", "POST", file)}

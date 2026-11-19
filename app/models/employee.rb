@@ -22,6 +22,22 @@ class Employee < ApplicationRecord
     where("joined_on <= ?", date).where("last_working_on IS NULL OR last_working_on >= ?", date)
   end
 
+  def self.in_organization(country: nil, department: nil, role: nil)
+    employees = all
+    employees = employees.where(country_code: country) if country.present?
+    employees = employees.where(department: Department.where(name: department)) if department.present?
+    employees = employees.where(job_role: JobRole.where(name: role)) if role.present?
+    employees
+  end
+
+  def self.organization_options
+    {
+      countries: COUNTRY_CODES,
+      departments: Department.order(:name).pluck(:name),
+      roles: JobRole.order(:name).pluck(:name)
+    }
+  end
+
   def self.hire!(attributes:, salary:, recorded_by:)
     transaction do
       employee = create!(attributes)

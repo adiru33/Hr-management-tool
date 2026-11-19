@@ -19,6 +19,8 @@ In the seeded local development database, sign in as `hr1@acme.example` with the
 
 Use **Add employee** to create a profile and its starting annual salary in one transaction. Open a profile to edit its name, work country, department, and job role, or record its last working day. The starting salary and later salary changes stay in the history after departure.
 
+Open **Compensation** and select a country, department, or job role. The report lists headcount, mean, and median annual base salary for each currency, using each active employee's latest effective salary. Amounts are rounded to the nearest minor unit of the currency.
+
 ### Import new employees from CSV
 
 Choose **Employees → Import CSV**, then download the [sample CSV](public/templates/employee-import.csv). Keep the header names, save as UTF-8, and use existing department and job role names. Use `YYYY-MM-DD` for the joining date and enter the full annual salary in the chosen currency, without grouping separators or currency symbols. The upload supports up to 10,000 employees and 5 MB per file.
