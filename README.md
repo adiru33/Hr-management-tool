@@ -45,3 +45,4 @@ The enrollment command prompts for the password. Pre-enroll a primary and backup
 - [Database design](docs/database-design-v2.md)
 - [Implementation milestone and decision log](docs/implementation-v3.md)
 - [Sample data and test results](docs/implementation-v4.md)
+- [HR workflow, access handover, and migration decisions](docs/implementation-v5.md)
