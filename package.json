@@ -1,0 +1,14 @@
+{
+  "name": "acme-compensation",
+  "private": true,
+  "scripts": {
+    "build": "esbuild app/javascript/application.jsx --bundle --minify --outdir=app/assets/builds"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}
