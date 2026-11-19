@@ -22,7 +22,7 @@ The Rails, React, and SQLite foundation is in place. This milestone turns the [v
 | Why use both department and job role? | Department identifies the team, such as Engineering. Job role identifies the position, such as Data Analyst. One role can appear in several departments. HR can use both dimensions in compensation reports. |
 | Where does country go? | Each employee has one required `country_code` for their current work country. Each salary row carries its own currency. Reports can filter by country and group salary figures by currency. |
 | How will HR get an employee document? | The planned CSV download will include the employee’s details, joining and departure dates, and one row per salary entry. It will use the same timeline and increase calculations as the employee detail page. |
-| Why choose SQLite? | The assessment serves one organization and starts with 10,000 employees. SQLite keeps local setup light on a 4 GB machine because it runs inside the application process. The deployment plan uses one app instance and a persistent disk for the database file. |
+| Why choose SQLite? | The assessment serves one organization and starts with 10,000 employees. SQLite keeps local setup light. The deployment plan uses one app instance and a persistent disk for the database file. |
 | Which indexes do we need now? | Employee number is unique. Country, department, and job role have filter indexes. The unique `(employee_id, effective_on)` index supports the latest-salary lookup and prevents two entries for the same employee on the same date. We’ll use query plans to decide whether future directory and reporting queries need additional composite indexes. |
 
 ## Verification and next step
