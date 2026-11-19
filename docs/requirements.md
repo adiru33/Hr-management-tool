@@ -2,20 +2,19 @@
 
 ## Goal
 
-Give ACME’s HR manager a web application to manage annual base salaries for 10,000 employees across multiple countries and answer questions about how ACME pays people. Replace routine spreadsheet lookups, salary updates, and basic compensation reporting.
+Give ACME’s HR managers a web application to manage employment records and annual base salaries for 10,000 employees across countries, and answer questions about how ACME pays people.
 
 ## Scope and HR workflow
 
-1. **Find employees and manage job roles.** HR signs in and searches the paginated directory by name or employee ID, with filters for country, department, and job role. HR can create and rename job roles and assign one current role per employee.
-2. **Review and update salary.** The employee’s salary timeline starts with their joining salary. Each later change shows its effective date, previous and new salary, and the amount and percentage change when the currency is the same. For a currency change, show both amounts and currencies and omit the calculated change. HR records a positive amount, currency, and effective date. The system retains who recorded it and when. Each employee has at most one record per effective date. A future entry appears as scheduled and becomes current on its effective date.
-3. **Download an employee record.** From the employee page, HR exports a CSV with employee ID, name, country, department, current job role, and one row per salary entry, including its effective date, currency, salary amount, and change figures where applicable. Scheduled entries are identified.
-4. **Answer compensation questions.** HR filters the overview by country, department, and job role. It shows headcount with a current salary, mean, and median by currency. Each employee contributes their latest effective salary. For example, HR can find the median annual base salary in INR for Engineering in India.
-
-Only authenticated HR managers can view or change salary data. The deployed assessment demo uses synthetic employee records.
+1. **Sign in and find employees.** HR searches the paginated directory by name or employee ID and filters by country, department, job role, or employment status. HR managers have employee records like their colleagues. A linked login grants HR permissions only while the manager is employed.
+2. **Record joining and resignation.** HR creates an employee profile with a date of joining, country, department, one current job role, and a starting salary effective on the joining date. HR can create, rename, and assign job roles. To record a resignation, HR enters the last working day. Employment runs from the joining date through the last working day, inclusive. Former employees remain searchable with their salary history intact.
+3. **Review and update salary.** The timeline shows the joining salary and each change’s effective date, previous salary, new salary, and amount and percentage difference in the same currency. Currency changes show both amounts without a calculated difference. Each entry records a positive amount, currency, effective date, and who entered it and when. Dates are unique per employee and fall within employment. Future entries appear as scheduled. Any existing entries after a recorded last working day are retained and marked as unapplied.
+4. **Export an employee CSV.** HR downloads profile details, including joining date and last working day if set, plus one row per salary entry with date, status, currency, amount, and applicable changes.
+5. **Review compensation.** The overview shows headcount with a current salary, mean, and median by currency, with country, department, and job role filters. Each active employee contributes their latest effective salary.
 
 ## Deliberately out of scope
 
-- **Spreadsheet import and employee onboarding.** The seed script creates employee profiles and joining salaries. A live migration needs data mapping and reconciliation.
+- **Spreadsheet import.** A live migration needs data mapping and reconciliation. The seed script supplies the demo data.
 - **Payroll, taxes, bonuses, and equity.** These require country-specific rules or additional compensation models.
 - **Exchange-rate conversion and cross-currency totals.** These require a rate source and an agreed rate date.
 - **Approval chains, employee self-service, and extra access levels.** These require separate permission and workflow decisions. Job roles describe employees’ positions. Application access belongs to HR managers.
@@ -23,4 +22,4 @@ Only authenticated HR managers can view or change salary data. The deployed asse
 
 ## Acceptance criteria
 
-The deployed Rails and React app uses a relational database and a repeatable seed script for 10,000 synthetic employees. The video demo shows HR reviewing two historical increases, scheduling a raise, exporting a CSV, and filtering compensation by job role. Automated tests cover access, validation, effective dates, change calculations, CSV export, and currency-safe reporting.
+The deployed Rails and React app uses a relational database and a repeatable seed script for 10,000 synthetic employees. The video shows HR recording a hire and resignation, reviewing two raises, exporting a CSV, and filtering compensation. Automated tests cover HR access, employment and salary dates, raise calculations, CSV export, and currency-specific reporting.
