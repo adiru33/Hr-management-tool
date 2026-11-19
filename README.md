@@ -1,6 +1,8 @@
 # ACME Salary Management
 
-Rails serves the React app and will serve the API from the same origin. SQLite stores the application data on disk.
+Rails serves the React app and API from the same origin. SQLite stores the application data on disk.
+
+Open the [hosted assessment demo](https://acme-web-production-29a96927.up.railway.app/). The first request can take longer while Railway wakes the service. Reviewer sign-in details are shared privately.
 
 The [54-second walkthrough](docs/acme-assessment-demo.mp4) shows a scheduled salary change, a CSV export, a filtered compensation report, and how an Access Admin grants and revokes HR access. All employee data in the video is synthetic.
 
