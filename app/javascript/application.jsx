@@ -1,13 +1,28 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { EmployeePreview } from "./employee-preview.jsx";
+import { api } from "./api.js";
 
-function SignIn({ onContinue }) {
+function SignIn({ onSignIn }) {
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
 
-  function previewSignIn(event) {
+  async function signIn(event) {
     event.preventDefault();
-    onContinue();
+    setError("");
+    setPending(true);
+    const form = new FormData(event.currentTarget);
+    try {
+      const { account } = await api("/api/session", {
+        method: "POST", body: { email: form.get("email"), password: form.get("password") },
+      });
+      onSignIn(account);
+    } catch (failure) {
+      setError(failure.status ? failure.message : "Unable to reach the server. Please try again.");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -25,7 +40,7 @@ function SignIn({ onContinue }) {
           <h2 id="sign-in-heading">Sign in</h2>
           <p className="sign-in__intro">Use your ACME HR account.</p>
 
-          <form className="sign-in__form" onSubmit={previewSignIn}>
+          <form className="sign-in__form" onSubmit={signIn} onChange={() => setError("")}>
             <div className="form-field">
               <label htmlFor="email">Work email</label>
               <input id="email" name="email" type="email" autoComplete="username" autoCapitalize="none"
@@ -44,12 +59,12 @@ function SignIn({ onContinue }) {
               </div>
             </div>
 
-            <button className="sign-in__submit" type="submit">Sign in</button>
+            {error && <p className="form-error" role="alert">{error}</p>}
+            <button className="sign-in__submit" type="submit" disabled={pending}>
+              {pending ? "Signing in…" : "Sign in"}
+            </button>
           </form>
 
-          <p className="sign-in__preview">
-            Design preview. Enter any valid sample email and a sample password to continue.
-          </p>
         </div>
       </section>
     </main>
@@ -57,10 +72,40 @@ function SignIn({ onContinue }) {
 }
 
 function App() {
-  const [previewOpen, setPreviewOpen] = useState(false);
-  return previewOpen
-    ? <EmployeePreview onSignOut={() => setPreviewOpen(false)} />
-    : <SignIn onContinue={() => setPreviewOpen(true)} />;
+  const [account, setAccount] = useState(undefined);
+  const [connectionError, setConnectionError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    api("/api/session", { signal: controller.signal })
+      .then(({ account }) => { if (!controller.signal.aborted) setAccount(account); })
+      .catch(() => {
+        if (!controller.signal.aborted) setConnectionError("Unable to reach the server.");
+      });
+    return () => controller.abort();
+  }, [attempt]);
+
+  async function signOut() {
+    await api("/api/session", { method: "DELETE" });
+    setAccount(null);
+  }
+
+  if (account === undefined) {
+    return <main className="workspace-main">
+      {connectionError ? <>
+        <p role="alert">{connectionError}</p>
+        <button className="button button--secondary" onClick={() => {
+          setConnectionError("");
+          setAttempt((previous) => previous + 1);
+        }}>Try again</button>
+      </> : <p role="status">Checking your session…</p>}
+    </main>;
+  }
+
+  return account
+    ? <EmployeePreview onSignOut={signOut} />
+    : <SignIn onSignIn={setAccount} />;
 }
 
 createRoot(document.getElementById("app")).render(<App />);

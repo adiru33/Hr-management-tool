@@ -323,7 +323,21 @@ export function EmployeePreview({ onSignOut }) {
   const [selected, setSelected] = useState(null);
   const [filters, setFilters] = useState(emptyFilters);
   const [page, setPage] = useState(1);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
   const employee = employees.find(({ number }) => number === selected);
+
+  async function signOut() {
+    setSigningOut(true);
+    setSignOutError("");
+    try {
+      await onSignOut();
+    } catch {
+      setSignOutError("Unable to sign out. Please try again.");
+    } finally {
+      setSigningOut(false);
+    }
+  }
 
   function changeFilter(field, value) {
     setFilters((previous) => ({ ...previous, [field]: value }));
@@ -346,10 +360,13 @@ export function EmployeePreview({ onSignOut }) {
       <header className="workspace-header">
         <div className="workspace-header__inner">
           <div className="workspace-brand"><strong>ACME</strong><span>Salary Management</span></div>
-          <button className="button button--secondary" onClick={onSignOut}>Sign out</button>
+          <button className="button button--secondary" onClick={signOut} disabled={signingOut}>
+            {signingOut ? "Signing out…" : "Sign out"}
+          </button>
         </div>
       </header>
       <main className="workspace-main">
+        {signOutError && <p className="form-error" role="alert">{signOutError}</p>}
         <p className="preview-banner">Design preview · Sample data as of {formatDate(previewDate)} · Changes reset on refresh or sign-out</p>
         {employee ? (
           <EmployeeDetail key={employee.number} employee={employee} onBack={() => setSelected(null)} onSave={saveSalary} />

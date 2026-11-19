@@ -162,12 +162,9 @@ button {
   background: #0d392d;
 }
 
-.sign-in__preview {
-  min-height: 2.7em;
-  margin: 1.2rem 0 0;
-  color: #4a5e56;
-  font-size: 0.85rem;
-  line-height: 1.45;
+.sign-in__submit:disabled {
+  opacity: 0.75;
+  cursor: wait;
 }
 
 @media (max-width: 680px) {
