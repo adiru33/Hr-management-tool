@@ -16,6 +16,7 @@ class AccessManagementTest < ActionDispatch::IntegrationTest
     sign_in(@manager)
     get api_access_accounts_path, as: :json
     assert_response :forbidden
+    assert_equal ["wrong_role", "hr_manager"], response.parsed_body.values_at("code", "accountRole")
     patch api_access_account_path(@replacement), params: { operation: "grant" }, as: :json
     assert_response :forbidden
 
@@ -28,6 +29,7 @@ class AccessManagementTest < ActionDispatch::IntegrationTest
 
     get api_employees_path, as: :json
     assert_response :forbidden
+    assert_equal ["wrong_role", "access_admin"], response.parsed_body.values_at("code", "accountRole")
     get api_employee_path(@manager.employee.employee_number), as: :json
     assert_response :forbidden
     post api_employee_salary_records_path(@manager.employee.employee_number), as: :json

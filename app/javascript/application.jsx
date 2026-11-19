@@ -4,6 +4,8 @@ import { EmployeeWorkspace } from "./employee-workspace.jsx";
 import { AccessWorkspace } from "./access-workspace.jsx";
 import { api } from "./api.js";
 
+const workspaces = new Map([["hr_manager", EmployeeWorkspace], ["access_admin", AccessWorkspace]]);
+
 function SignIn({ onSignIn }) {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [pending, setPending] = useState(false);
@@ -76,7 +78,25 @@ function App() {
   const [account, setAccount] = useState(undefined);
   const [connectionError, setConnectionError] = useState("");
   const [attempt, setAttempt] = useState(0);
-  const endSession = useCallback(() => setAccount(null), []);
+
+  const refreshSession = useCallback(() => {
+    setConnectionError("");
+    setAccount(undefined);
+    setAttempt((previous) => previous + 1);
+  }, []);
+
+  const accountRole = account?.role;
+  const handleSessionError = useCallback((failure) => {
+    if (failure.status === 401) {
+      setAccount(null);
+      return true;
+    }
+    if (failure.code === "wrong_role" && failure.accountRole !== accountRole) {
+      refreshSession();
+      return true;
+    }
+    return false;
+  }, [accountRole, refreshSession]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -97,18 +117,22 @@ function App() {
     return <main className="workspace-main">
       {connectionError ? <>
         <p role="alert">{connectionError}</p>
-        <button className="button button--secondary" onClick={() => {
-          setConnectionError("");
-          setAttempt((previous) => previous + 1);
-        }}>Try again</button>
+        <button className="button button--secondary" onClick={refreshSession}>Try again</button>
       </> : <p role="status">Checking your session…</p>}
     </main>;
   }
 
   if (!account) return <SignIn onSignIn={setAccount} />;
 
-  const Workspace = account.role === "access_admin" ? AccessWorkspace : EmployeeWorkspace;
-  return <Workspace account={account} onSignOut={signOut} onSessionExpired={endSession} />;
+  const Workspace = workspaces.get(accountRole);
+  if (!Workspace) {
+    return <main className="workspace-main">
+      <p role="alert">Your workspace could not be identified.</p>
+      <button className="button button--secondary" onClick={refreshSession}>Try again</button>
+    </main>;
+  }
+
+  return <Workspace account={account} onSignOut={signOut} onSessionError={handleSessionError} />;
 }
 
 createRoot(document.getElementById("app")).render(<App />);

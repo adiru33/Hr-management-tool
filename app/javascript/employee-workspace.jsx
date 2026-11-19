@@ -293,7 +293,7 @@ function EmployeeDetail({ employee, onBack, onSave }) {
   );
 }
 
-export function EmployeeWorkspace({ account, onSignOut, onSessionExpired }) {
+export function EmployeeWorkspace({ account, onSignOut, onSessionError }) {
   const [filters, setFilters] = useState(emptyFilters);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(null);
@@ -317,8 +317,7 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionExpired }) {
         }
       } catch (failure) {
         if (!controller.signal.aborted) {
-          if (failure.status === 401) onSessionExpired();
-          else setError(failure.status ? failure.message : "Unable to reach the server.");
+          if (!onSessionError(failure)) setError(failure.status ? failure.message : "Unable to reach the server.");
         }
       } finally {
         if (!controller.signal.aborted) setBusy(false);
@@ -329,7 +328,7 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionExpired }) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [filters, page, selected, attempt, onSessionExpired]);
+  }, [filters, page, selected, attempt, onSessionError]);
 
   function startLoading() {
     setError("");
@@ -371,7 +370,7 @@ export function EmployeeWorkspace({ account, onSignOut, onSessionExpired }) {
       setEmployee((current) => current?.number === number ? updated : current);
       return updated;
     } catch (failure) {
-      if (failure.status === 401) onSessionExpired();
+      onSessionError(failure);
       throw failure;
     }
   }

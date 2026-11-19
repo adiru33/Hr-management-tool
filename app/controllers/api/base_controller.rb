@@ -35,7 +35,8 @@ module Api
       if current_account.nil?
         render json: { error: "Sign in to continue.", csrfToken: form_authenticity_token }, status: :unauthorized
       elsif current_account.role != role
-        render json: { error: "#{label} access is required." }, status: :forbidden
+        render json: { error: "#{label} access is required.", code: "wrong_role", accountRole: current_account.role },
+          status: :forbidden
       end
     end
 

@@ -71,7 +71,7 @@ function AccessAccount({ account, onUpdate, onBack }) {
   );
 }
 
-export function AccessWorkspace({ account, onSignOut, onSessionExpired }) {
+export function AccessWorkspace({ account, onSignOut, onSessionError }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [result, setResult] = useState(null);
@@ -90,8 +90,7 @@ export function AccessWorkspace({ account, onSignOut, onSessionExpired }) {
         if (!request.signal.aborted) setResult(data);
       } catch (failure) {
         if (!request.signal.aborted) {
-          if (failure.status === 401) onSessionExpired();
-          else setError(failure.status ? failure.message : "Unable to reach the server. Please try again.");
+          if (!onSessionError(failure)) setError(failure.status ? failure.message : "Unable to reach the server. Please try again.");
         }
       } finally {
         if (!request.signal.aborted) setLoading(false);
@@ -101,7 +100,7 @@ export function AccessWorkspace({ account, onSignOut, onSessionExpired }) {
       clearTimeout(timer);
       request.abort();
     };
-  }, [search, page, attempt, selected, onSessionExpired]);
+  }, [search, page, attempt, selected, onSessionError]);
 
   function startLoading() {
     setLoading(true);
@@ -113,7 +112,7 @@ export function AccessWorkspace({ account, onSignOut, onSessionExpired }) {
       const updated = await api(`/api/access_accounts/${selected.id}`, { method: "PATCH", body });
       setSelected(updated);
     } catch (failure) {
-      if (failure.status === 401) onSessionExpired();
+      onSessionError(failure);
       throw failure;
     }
   }

@@ -1,7 +1,9 @@
 export class ApiError extends Error {
-  constructor(status, message) {
-    super(message);
+  constructor(status, data) {
+    super(data.error || "Could not complete the request. Please try again.");
     this.status = status;
+    this.code = data.code;
+    this.accountRole = data.accountRole;
   }
 }
 
@@ -17,6 +19,6 @@ export async function api(path, { method = "GET", body, signal } = {}) {
   });
   const data = await response.json().catch(() => ({}));
   if (data.csrfToken && csrf) csrf.content = data.csrfToken;
-  if (!response.ok) throw new ApiError(response.status, data.error || "Could not complete the request. Please try again.");
+  if (!response.ok) throw new ApiError(response.status, data);
   return data;
 }
