@@ -13,6 +13,8 @@ bin/dev
 
 Open [localhost:3000](http://localhost:3000). After editing React code, run `npm run build` and refresh. Run `bin/rails test` after building the assets. Tests run in a single process by default.
 
+See the [deployment guide](docs/deployment.md) to host the assessment demo with persistent SQLite storage.
+
 ## Try the HR workflow
 
 In the seeded local development database, sign in as `hr1@acme.example` with the development password `local-acme-hr-one`. Search for `DEMO-00001`, open the employee's salary history, and select **Record salary change**. A salary change with a future effective date appears as **Scheduled**. Saved salary changes are written to SQLite and remain after refresh.

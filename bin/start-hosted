@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export RAILS_ENV=production
+: "${SECRET_KEY_BASE:?Set a stable Rails secret in the hosting environment.}"
+
+if [[ -n "${RAILWAY_ENVIRONMENT_ID:-}" ]]; then
+  : "${RAILWAY_VOLUME_MOUNT_PATH:?Attach a persistent SQLite volume before starting the service.}"
+else
+  : "${ACME_DATABASE_PATH:?Set the SQLite path on persistent storage.}"
+fi
+
+bin/rails db:prepare
+exec bin/rails server -b "${BIND_ADDRESS:-0.0.0.0}"

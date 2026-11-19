@@ -13,4 +13,10 @@ test:
 
 production:
   <<: *default
-  database: <%= ENV.fetch("ACME_DATABASE_PATH", "storage/production.sqlite3").to_json %>
+  database: <%= ENV.fetch("ACME_DATABASE_PATH") {
+    if ENV["RAILWAY_VOLUME_MOUNT_PATH"]
+      File.join(ENV.fetch("RAILWAY_VOLUME_MOUNT_PATH"), "acme.sqlite3")
+    else
+      "storage/production.sqlite3"
+    end
+  }.to_json %>
