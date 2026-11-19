@@ -62,3 +62,4 @@ The enrollment command prompts for the password. Pre-enroll a primary and backup
 - [HR workflow, access handover, and migration decisions](docs/implementation-v5.md)
 - [Employee lifecycle, CSV import, and review notes](docs/implementation-v6.md)
 - [Compensation overview, index measurements, and review notes](docs/implementation-v7.md)
+- [Employee CSV export and HR-only job roles](docs/implementation-v8.md)
