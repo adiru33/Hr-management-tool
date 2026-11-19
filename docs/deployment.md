@@ -11,7 +11,7 @@ Deploy the repository as a single Railway service. Railpack builds React and Rai
 
 | Service setting | Value |
 | --- | --- |
-| Build command | `npm run build && RAILS_ENV=production SECRET_KEY_BASE_DUMMY=1 bin/rails assets:precompile` |
+| Build command | `npm ci --include=dev && npm run build && RAILS_ENV=production SECRET_KEY_BASE_DUMMY=1 bin/rails assets:precompile` |
 | Start command | `bin/start-hosted` |
 | Health check | `/up` with a 180-second timeout |
 | Serverless | Enabled to save usage while idle |
