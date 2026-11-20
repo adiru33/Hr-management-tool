@@ -49,6 +49,10 @@ Run `bin/rails db:migrate db:seed` to add the Access Admin and candidate account
 
 The Access Admin workspace can grant HR access to an enrolled active employee, record an HR manager’s last working day, or revoke HR access immediately. Revocation invalidates existing sessions, including after access is restored. Each admin action records its actor and target. Access Admins have one dedicated role and no salary access. HR managers can manage salaries subject to the self-edit restriction.
 
+When a replacement takes over the same HR inbox, open the outgoing manager’s account and select **Transfer HR access**. Look up the active replacement by employee number, verify their name, and set a temporary password to share privately. The incoming manager signs in with the same email and must choose their own password before accessing employee data. The transfer invalidates the outgoing manager’s sessions and reset links. Each employee keeps their own profile, joining date, and salary history. The salary timeline shows who recorded each entry.
+
+Coordinate access to the shared mailbox with the organization’s email administrator. Once email recovery is enabled, the person who can open that mailbox can receive reset links.
+
 A trusted deployment operator enrolls verified employee identities through an interactive terminal. Employees must have a profile before enrollment. Seed credentials are for the local demo.
 
 ```bash

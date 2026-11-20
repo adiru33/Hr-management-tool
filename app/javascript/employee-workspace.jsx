@@ -283,7 +283,7 @@ function EmployeeDetail({ employee, onBack, onSave, onEdit, onDeparture, onExpor
         {exportError && <p className="form-error section-heading" role="alert">{exportError}</p>}
         <div className="table-scroll">
           <table aria-label="Salary history">
-            <thead><tr><th scope="col">Effective date</th><th scope="col">Annual base salary</th><th scope="col">Change</th><th scope="col">Status</th></tr></thead>
+            <thead><tr><th scope="col">Effective date</th><th scope="col">Annual base salary</th><th scope="col">Change</th><th scope="col">Status</th><th scope="col">Recorded by</th></tr></thead>
             <tbody>
               {timeline.map((salary) => (
                 <tr key={salary.effectiveOn}>
@@ -296,6 +296,7 @@ function EmployeeDetail({ employee, onBack, onSave, onEdit, onDeparture, onExpor
                   </td>
                   <td><SalaryChange salary={salary} /></td>
                   <td><Status>{salary.status}</Status></td>
+                  <td>{salary.recordedBy}</td>
                 </tr>
               ))}
             </tbody>

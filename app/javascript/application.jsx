@@ -5,7 +5,7 @@ import { CompensationWorkspace } from "./compensation-workspace.jsx";
 import { AccessWorkspace } from "./access-workspace.jsx";
 import { JobRolesWorkspace } from "./job-roles-workspace.jsx";
 import { api } from "./api.js";
-import { PasswordRecoveryForm } from "./password-recovery.jsx";
+import { PasswordRecoveryForm, RequiredPasswordChange } from "./password-recovery.jsx";
 
 const hrViews = { employees: EmployeeWorkspace, compensation: CompensationWorkspace, jobRoles: JobRolesWorkspace };
 
@@ -162,6 +162,12 @@ function App() {
       <PasswordRecoveryForm onBack={() => setRequestingReset(false)} />
     </SignInScreen>;
     return <SignIn onSignIn={setAccount} onForgotPassword={recoveryAvailable ? () => setRequestingReset(true) : undefined} />;
+  }
+
+  if (account.passwordChangeRequired) {
+    return <SignInScreen title="Set your password" intro="Choose your own password to open your HR workspace.">
+      <RequiredPasswordChange onComplete={setAccount} onSignOut={signOut} />
+    </SignInScreen>;
   }
 
   const Workspace = workspaces.get(accountRole);

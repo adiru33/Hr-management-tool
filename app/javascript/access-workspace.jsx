@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "./api.js";
+import { NewPasswordFields } from "./password-recovery.jsx";
 import { Workspace } from "./workspace.jsx";
 
 function AccessStatus({ account }) {
@@ -7,8 +8,66 @@ function AccessStatus({ account }) {
   return <span className={className}>{account.status}</span>;
 }
 
-function AccessAccount({ account, onUpdate, onBack }) {
+function TransferHrForm({ account, onUpdate, onCancel, onSessionError }) {
+  const [number, setNumber] = useState("");
+  const [candidate, setCandidate] = useState(null);
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const search = useRef(null);
+  useEffect(() => { if (!candidate) search.current.focus(); }, [candidate]);
+
+  async function submit(event) {
+    event.preventDefault();
+    const fields = Object.fromEntries(new FormData(event.currentTarget));
+    setPending(true);
+    setError("");
+    try {
+      if (candidate) {
+        await onUpdate({ ...fields, operation: "transfer", employee_number: candidate.number });
+      } else {
+        const query = new URLSearchParams({ employee_number: number });
+        setCandidate(await api(`/api/access_accounts/${account.id}/transfer_candidate?${query}`));
+      }
+    } catch (failure) {
+      if (!onSessionError(failure)) {
+        setError(failure.status ? failure.message : "Unable to reach the server. Please try again.");
+      }
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return <section className="workspace-card salary-form-card access-transfer" aria-labelledby="transfer-heading">
+    <h2 id="transfer-heading">Transfer HR access</h2>
+    <p>Keep {account.email} and assign it to a different employee. {account.name} will lose access immediately.</p>
+    <form className="access-transfer__form" onSubmit={submit} onChange={() => setError("")}>
+      {candidate ? <>
+        <p><strong>Incoming HR Manager</strong><br />{candidate.name} · {candidate.number}</p>
+        <p>Share the temporary password privately. {candidate.name} must change it before opening the HR workspace.</p>
+        <NewPasswordFields label="Temporary password" prefix="transfer" disabled={pending} />
+      </> : <div className="form-field">
+        <label htmlFor="replacement-number">Replacement employee number</label>
+        <input id="replacement-number" ref={search} value={number} onChange={(event) => setNumber(event.target.value)}
+          maxLength={50} disabled={pending} required />
+      </div>}
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <div className="button-group">
+        <button className="button button--secondary" type="button" disabled={pending} onClick={onCancel}>Cancel</button>
+        {candidate && <button className="button button--secondary" type="button" disabled={pending} onClick={() => {
+          setCandidate(null);
+          setError("");
+        }}>Change employee</button>}
+        <button className="button button--primary" type="submit" disabled={pending}>
+          {pending ? "Please wait…" : candidate ? "Confirm transfer" : "Find employee"}
+        </button>
+      </div>
+    </form>
+  </section>;
+}
+
+function AccessAccount({ account, transferNotice, onUpdate, onBack, onSessionError }) {
+  const [pending, setPending] = useState(false);
+  const [transferring, setTransferring] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const heading = useRef(null);
@@ -29,7 +88,9 @@ function AccessAccount({ account, onUpdate, onBack }) {
         record_departure: "Last working day recorded.",
       }[operation]);
     } catch (failure) {
-      setError(failure.status ? failure.message : "Unable to reach the server. Please try again.");
+      if (!onSessionError(failure)) {
+        setError(failure.status ? failure.message : "Unable to reach the server. Please try again.");
+      }
     } finally {
       setPending(false);
     }
@@ -37,12 +98,14 @@ function AccessAccount({ account, onUpdate, onBack }) {
 
   return (
     <>
-      <button className="back-link" onClick={onBack} disabled={pending}>← Back to HR access</button>
+      {!transferring && <button className="back-link" onClick={onBack} disabled={pending}>← Back to HR access</button>}
       <div className="workspace-heading">
         <h1 ref={heading} tabIndex={-1}>{account.name}</h1>
-        <p>{account.number} · {account.email}</p>
+        <p>{account.number}{account.email && ` · ${account.email}`}</p>
       </div>
-      <section className="workspace-card salary-form-card" aria-labelledby="access-heading">
+      {transferNotice && <p className="workspace-notice" role="status">{transferNotice}</p>}
+      {transferring ? <TransferHrForm account={account} onUpdate={onUpdate} onCancel={() => setTransferring(false)}
+        onSessionError={onSessionError} /> : <section className="workspace-card salary-form-card" aria-labelledby="access-heading">
         <h2 id="access-heading">HR access</h2>
         <p><AccessStatus account={account} /></p>
         <div className="button-group access-actions">
@@ -50,6 +113,8 @@ function AccessAccount({ account, onUpdate, onBack }) {
             onClick={() => update("grant")}>Grant HR access</button>}
           {account.accessEnabled && <button className="button button--secondary" disabled={pending}
             onClick={() => update("revoke")}>Revoke access now</button>}
+          {account.canTransfer && <button className="button button--secondary" disabled={pending}
+            onClick={() => setTransferring(true)}>Transfer HR access</button>}
         </div>
         {account.canRecordDeparture && (
           <form className="access-departure" onSubmit={(event) => {
@@ -66,7 +131,7 @@ function AccessAccount({ account, onUpdate, onBack }) {
         )}
         {message && <p className="workspace-notice" role="status">{message}</p>}
         {error && <p className="form-error" role="alert">{error}</p>}
-      </section>
+      </section>}
     </>
   );
 }
@@ -76,6 +141,7 @@ export function AccessWorkspace({ account, onSignOut, onSessionError }) {
   const [page, setPage] = useState(1);
   const [result, setResult] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [transferNotice, setTransferNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -108,13 +174,9 @@ export function AccessWorkspace({ account, onSignOut, onSessionError }) {
   }
 
   async function update(body) {
-    try {
-      const updated = await api(`/api/access_accounts/${selected.id}`, { method: "PATCH", body });
-      setSelected(updated);
-    } catch (failure) {
-      onSessionError(failure);
-      throw failure;
-    }
+    const updated = await api(`/api/access_accounts/${selected.id}`, { method: "PATCH", body });
+    if (body.operation === "transfer") setTransferNotice(`HR access transferred to ${updated.name}.`);
+    setSelected(updated);
   }
 
   const currentPage = result?.page ?? 1;
@@ -122,8 +184,8 @@ export function AccessWorkspace({ account, onSignOut, onSessionError }) {
   return (
     <Workspace account={account} onSignOut={onSignOut}>
       {selected ? (
-        <AccessAccount key={selected.id} account={selected} onUpdate={update}
-          onBack={() => { startLoading(); setSelected(null); }} />
+        <AccessAccount key={selected.id} account={selected} onUpdate={update} transferNotice={transferNotice}
+          onSessionError={onSessionError} onBack={() => { startLoading(); setSelected(null); setTransferNotice(""); }} />
       ) : (
         <>
           <div className="workspace-heading">
@@ -155,7 +217,7 @@ export function AccessWorkspace({ account, onSignOut, onSessionError }) {
                           <button className="employee-link" onClick={() => setSelected(entry)}>{entry.name}</button>
                           <span className="muted employee-number">{entry.number}</span>
                         </th>
-                        <td>{entry.email}</td>
+                        <td>{entry.email ?? "—"}</td>
                         <td><AccessStatus account={entry} /></td>
                       </tr>
                     ))}

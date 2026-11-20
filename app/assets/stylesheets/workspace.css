@@ -403,6 +403,16 @@
   padding: 1.2rem;
 }
 
+.access-transfer__form {
+  display: grid;
+  gap: 1rem;
+  max-width: 36rem;
+}
+
+.access-transfer__form p {
+  margin: 0;
+}
+
 .access-actions {
   margin-top: 0.9rem;
 }
