@@ -7,7 +7,8 @@ module Api
     def create
       email = params[:email]
       if email.is_a?(String) && email.bytesize <= 254 && URI::MailTo::EMAIL_REGEXP.match?(email.strip)
-        RequestPasswordResetJob.perform_later(email)
+        account = HrAccount.find_for_database_authentication(email: email)
+        RequestPasswordResetJob.perform_later(account&.id, account&.access_version)
       end
 
       render json: { message: "If an eligible account matches that email, a reset link will be sent." }, status: :accepted
@@ -25,7 +26,7 @@ module Api
       reset = HrAccount.transaction do
         account = HrAccount.with_reset_password_token(token)
         if account&.sign_in_allowed_on?(business_date) && account.reset_password_period_valid?
-          account.reset_password_and_revoke_sessions(password, confirmation)
+          account.reset_password_and_revoke_sessions(password, confirmation, complete_setup: true)
         end
       end
       return invalid_link unless reset

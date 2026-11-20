@@ -10,15 +10,24 @@ class HrAccount < ApplicationRecord
   before_update :invalidate_recovery_on_access_revocation, if: -> { will_save_change_to_access_enabled?(to: false) }
 
   def sign_in_allowed_on?(date)
-    !role_employee? && access_enabled? && active_on?(date)
+    email.present? && !role_employee? && access_enabled? && active_on?(date)
   end
 
   def active_on?(date)
     employee.employed_on?(date)
   end
 
-  def reset_password_and_revoke_sessions(password, confirmation)
+  def issue_password_reset(access_version)
     with_lock do
+      set_reset_password_token if self.access_version == access_version && sign_in_allowed_on?(Date.current)
+    end
+  end
+
+  def reset_password_and_revoke_sessions(password, confirmation, complete_setup: false)
+    with_lock do
+      next false if complete_setup && password_change_required? && valid_password?(password)
+
+      self.password_change_required = false if complete_setup
       next false unless reset_password(password, confirmation)
 
       increment!(:access_version)
@@ -27,6 +36,10 @@ class HrAccount < ApplicationRecord
   end
 
   private
+
+  def email_required?
+    new_record? || access_enabled? || email.present?
+  end
 
   def invalidate_recovery_on_access_revocation
     # A reset request may have issued a token since this account was loaded.

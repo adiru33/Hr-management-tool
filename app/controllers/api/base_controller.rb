@@ -37,6 +37,8 @@ module Api
     def require_role(role, label)
       if current_account.nil?
         render json: { error: "Sign in to continue.", csrfToken: form_authenticity_token }, status: :unauthorized
+      elsif current_account.password_change_required?
+        render json: { error: "Set your own password to continue.", code: "password_change_required" }, status: :forbidden
       elsif current_account.role != role
         render json: { error: "#{label} access is required.", code: "wrong_role", accountRole: current_account.role },
           status: :forbidden

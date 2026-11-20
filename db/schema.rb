@@ -10,14 +10,16 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_19_020000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_20_010000) do
   create_table "account_access_events", force: :cascade do |t|
     t.integer "actor_id", null: false
     t.integer "target_id", null: false
     t.string "action", null: false
     t.date "last_working_on"
     t.datetime "created_at", null: false
+    t.integer "outgoing_account_id"
     t.index ["actor_id"], name: "index_account_access_events_on_actor_id"
+    t.index ["outgoing_account_id"], name: "index_account_access_events_on_outgoing_account_id"
     t.index ["target_id"], name: "index_account_access_events_on_target_id"
   end
 
@@ -45,7 +47,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_020000) do
 
   create_table "hr_accounts", force: :cascade do |t|
     t.integer "employee_id", null: false
-    t.string "email", null: false, collation: "NOCASE"
+    t.string "email", collation: "NOCASE"
     t.string "encrypted_password", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -54,10 +56,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_020000) do
     t.integer "access_version", default: 0, null: false
     t.string "reset_password_token"
     t.datetime "reset_password_sent_at"
+    t.boolean "password_change_required", default: false, null: false
     t.index ["email"], name: "index_hr_accounts_on_email", unique: true
     t.index ["employee_id"], name: "index_hr_accounts_on_employee_id", unique: true
     t.index ["reset_password_token"], name: "index_hr_accounts_on_reset_password_token", unique: true
     t.index ["role"], name: "index_hr_accounts_on_role"
+    t.check_constraint "email IS NOT NULL OR access_enabled = 0", name: "hr_accounts_require_email_for_access"
     t.check_constraint "role <> 'employee' OR access_enabled = 0", name: "hr_accounts_employee_access_disabled"
     t.check_constraint "role IN ('employee', 'hr_manager', 'access_admin')", name: "hr_accounts_valid_role"
   end
@@ -80,6 +84,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_020000) do
   end
 
   add_foreign_key "account_access_events", "hr_accounts", column: "actor_id"
+  add_foreign_key "account_access_events", "hr_accounts", column: "outgoing_account_id"
   add_foreign_key "account_access_events", "hr_accounts", column: "target_id"
   add_foreign_key "employees", "departments"
   add_foreign_key "employees", "job_roles"

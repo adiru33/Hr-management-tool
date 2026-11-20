@@ -3,6 +3,7 @@ module Api
     PAGE_SIZE = 25
 
     before_action :require_access_admin
+    rescue_from ManageHrAccess::InvalidOperation, with: :invalid_operation
 
     def index
       accounts = HrAccount.where(role: %i[employee hr_manager]).joins(:employee)
@@ -22,14 +23,15 @@ module Api
       render json: { accounts: entries.map { |account| account_data(account) }, page: page, pageSize: PAGE_SIZE, total: total }
     end
 
+    def transfer_candidate
+      employee = access_manager.transfer_candidate(target_id: params[:id], employee_number: params[:employee_number])
+      render json: { number: employee.employee_number, name: employee.full_name }
+    end
+
     def update
-      input = params.permit(:operation, :last_working_on)
-      account = ManageHrAccess.new(actor: current_account, date: business_date).call(
-        target_id: params[:id], action: input[:operation], last_working_on: input[:last_working_on]
-      )
+      input = params.permit(:operation, :last_working_on, :employee_number, :password, :password_confirmation)
+      account = access_manager.call(target_id: params[:id], action: input[:operation], input: input)
       render json: account_data(account)
-    rescue ManageHrAccess::InvalidOperation => error
-      render json: { error: error.message }, status: :unprocessable_entity
     rescue ActiveRecord::RecordInvalid => error
       render json: { error: error.record.errors.full_messages.to_sentence }, status: :unprocessable_entity
     rescue ActiveRecord::StatementTimeout
@@ -38,11 +40,23 @@ module Api
 
     private
 
+    def access_manager
+      ManageHrAccess.new(actor: current_account, date: business_date)
+    end
+
+    def invalid_operation(error)
+      render json: { error: error.message }, status: :unprocessable_entity
+    end
+
     def account_data(account)
       employee = account.employee
       active = account.sign_in_allowed_on?(business_date)
-      can_grant = !account.access_enabled? && account.active_on?(business_date)
-      status = if active
+      can_grant = account.email.present? && !account.access_enabled? && account.active_on?(business_date)
+      status = if account.email.blank?
+        "Transferred"
+      elsif active && account.password_change_required?
+        "Password setup required"
+      elsif active
         "Active"
       elsif account.role_employee?
         can_grant ? "Ready to grant" : "Ineligible"
@@ -53,6 +67,7 @@ module Api
       {
         id: account.id, number: employee.employee_number, name: employee.full_name, email: account.email,
         role: account.role, accessEnabled: account.access_enabled?, status: status, canGrant: can_grant,
+        canTransfer: account.role_hr_manager? && account.email.present?,
         canRecordDeparture: account.role_hr_manager?,
         joinedOn: employee.joined_on, lastWorkingOn: employee.last_working_on
       }

@@ -4,10 +4,12 @@ Rails.application.routes.draw do
   get "password/reset", to: "home#show", as: :password_reset
 
   namespace :api, defaults: { format: :json } do
-    resource :session, only: %i[show create destroy]
+    resource :session, only: %i[show create update destroy]
     resource :password_reset, only: %i[create update]
     resource :compensation, only: :show
-    resources :access_accounts, only: %i[index update]
+    resources :access_accounts, only: %i[index update] do
+      get :transfer_candidate, on: :member
+    end
     resources :job_roles, only: %i[index create update]
     resources :employees, only: %i[index show create update], param: :number, format: false,
       constraints: { number: /[^\/]+/ } do

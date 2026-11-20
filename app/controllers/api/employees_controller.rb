@@ -170,9 +170,12 @@ module Api
 
     def details(employee)
       timeline = EmployeeSalaryTimeline.new(employee, as_of: business_date)
+      author_names = HrAccount.joins(:employee).where(id: timeline.entries.map { |entry| entry.salary.recorded_by_hr_account_id })
+        .pluck(:id, "employees.full_name").to_h
       entries = timeline.entries.map do |entry|
         salary_data(entry.salary).merge(
-          status: entry.status, previous: salary_data(entry.previous), change: salary_change(entry)
+          status: entry.status, previous: salary_data(entry.previous), change: salary_change(entry),
+          recordedBy: author_names.fetch(entry.salary.recorded_by_hr_account_id)
         )
       end
 
