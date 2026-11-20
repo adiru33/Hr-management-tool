@@ -80,3 +80,4 @@ HR and Access Admin accounts use the same recovery flow. Links expire after 30 m
 - [Compensation overview, index measurements, and review notes](docs/implementation-v7.md)
 - [Employee CSV export and HR-only job roles](docs/implementation-v8.md)
 - [Devise password recovery and hosted assessment](docs/implementation-v9.md)
+- [Same-email HR handover and password setup](docs/implementation-v10.md)
